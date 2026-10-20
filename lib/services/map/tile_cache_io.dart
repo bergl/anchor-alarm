@@ -93,7 +93,10 @@ class TileCache {
     final res = await _client
         .get(Uri.parse(url ?? layer.url(z, x, y)), headers: headers)
         .timeout(timeout);
-    if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) return res.bodyBytes;
+    // WMS servers report errors as HTTP 200 with an XML body: never cache that.
+    final notImage = layer.isWms &&
+        !(res.headers['content-type'] ?? 'image/').startsWith('image/');
+    if (res.statusCode == 200 && res.bodyBytes.isNotEmpty && !notImage) return res.bodyBytes;
     if (layer.transparent && res.statusCode == 404) {
       return TileProvider.transparentImage;
     }

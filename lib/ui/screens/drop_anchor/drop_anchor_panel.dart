@@ -206,8 +206,12 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      'Charted depth ≈ ${formatDistance(charted.depthM, depthU, decimals: 1)} '
-                      '(${charted.source}) — check your sounder',
+                      charted.depthM < minPrefillDepthM
+                          // Grid cell on the coastline: the value is not usable.
+                          ? 'Charted depth < ${formatDistance(minPrefillDepthM, depthU)} '
+                              '(${charted.source}, coastline cell) — check your sounder'
+                          : 'Charted depth ≈ ${formatDistance(charted.depthM, depthU, decimals: 1)} '
+                              '(${charted.source}) — check your sounder',
                       key: const ValueKey('chartedDepthCaption'),
                       style: theme.textTheme.bodySmall,
                     ),

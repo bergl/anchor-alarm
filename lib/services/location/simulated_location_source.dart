@@ -41,8 +41,10 @@ class SimulatedLocationSource implements LocationSource, HeadingSource {
   })  : anchor = anchor ?? defaultAnchor,
         _rnd = random ?? math.Random();
 
-  /// Palmižana bay, Pakleni islands, Croatia.
-  static const defaultAnchor = LatLng(43.16330, 16.39720);
+  /// Pakleni kanal off Sveti Klement (Pakleni islands, Croatia), in open
+  /// water with ~13 m charted depth (EMODnet), so demos show a realistic
+  /// anchorage on the chart.
+  static const defaultAnchor = LatLng(43.16730, 16.39420);
 
   LatLng anchor;
   double rodeM;

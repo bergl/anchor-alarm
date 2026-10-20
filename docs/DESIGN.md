@@ -24,8 +24,11 @@ build *now*, the decisions taken, and the defaults chosen.
 - Profiles (Lunch stop / Overnight / Storm watch + custom).
 - History log: sessions with anchor, radius, duration, alarms, max distance, notes,
   down-sampled track; detail view on the map.
-- Map: OpenStreetMap base + OpenSeaMap seamarks overlay, persistent tile cache and
+- Map: OpenStreetMap / satellite / EMODnet depth-relief base, optional EMODnet or
+  GEBCO depth overlay, OpenSeaMap seamarks overlay, persistent tile cache and
   "download this area" for offline use; map is optional — alarm never depends on it.
+- Charted depth at the anchor (EMODnet, GEBCO fallback) prefills the Drop anchor
+  depth field as a hint.
 - Day / night (red) theme; units metric + knots by default, switchable.
 - **Web**: full app in the foreground (with a "keep this tab open" warning) and a
   **GPS simulator** (drift / drag / swing / GPS loss scenarios) for demos and testing.
@@ -42,7 +45,7 @@ planning assistant, local experience layer.
 | Framework | Flutter (iOS, Android, Web) | Spec + user choice |
 | State | Riverpod | Spec recommends Provider/Riverpod |
 | Location | `geolocator` (+ `LocationSource` abstraction) | Spec; abstraction allows simulator, NMEA later |
-| Map | `flutter_map` + OSM + OpenSeaMap | Spec recommendation, no API key |
+| Map | `flutter_map` + OSM + OpenSeaMap; EMODnet / GEBCO for depth | Spec recommendation, no API key; free, open bathymetry (see "Map layers") |
 | Tile cache | Own small disk cache (`CachingTileProvider`) | `flutter_map_tile_caching` v10 needs ObjectBox, breaks web |
 | Local storage | `sembast` (IO) / `sembast_web` (IndexedDB) | Same API on mobile and web, pure Dart |
 | Settings | `shared_preferences` | Simple key-value |
@@ -66,7 +69,7 @@ lib/
     alarm/              AlarmOutput (sound, vibration, wakelock), NotificationService
     battery/            BatteryMonitor
     storage/            SettingsRepository, SessionRepository (sembast)
-    map/                CachingTileProvider (+ web fallback)
+    map/                CachingTileProvider (+ web fallback), TileLayerSpec, DepthService
     remote/             RemoteSync interface (no-op)
   app/           Riverpod providers + WatchController orchestrating it all
   ui/            screens and widgets
@@ -104,6 +107,57 @@ same engine later run in a background isolate or on a server.
 - **GPS lost**: no usable fix for the configured time → alarm (clears with next fix
   but must still be acknowledged).
 - **Poor GPS**: averaged accuracy worse than the threshold for 2 min → warning.
+
+## Map layers & charted depth
+
+Goal: real marine data around the GPS position, without API keys. The user sails
+mostly in Europe / the Mediterranean, so EMODnet (European seas, fine grid) is the
+primary depth source and GEBCO (global, coarser) the fallback. All layers are
+`TileLayerSpec`s (`lib/services/map/tile_layer_spec.dart`);
+`activeTileLayers(settings)` lists what is drawn (bottom to top: base, depth
+overlay, seamarks) and what the offline download saves. Picked from the map's
+**Layers** button (bottom sheet) or Settings → Map (same `MapLayerOptions` widget).
+
+| Layer (`key`) | Source / request | Zoom | Licence / attribution |
+|---|---|---|---|
+| Chart (`osm`) | `tile.openstreetmap.org/{z}/{x}/{y}.png` | ≤19 | ODbL, "© OpenStreetMap contributors" |
+| Satellite (`esri_imagery`) | Esri World Imagery `…/tile/{z}/{y}/{x}` | ≤19 | Esri terms, "Esri, Maxar, Earthstar Geographics" |
+| Depth relief (`emodnet_base`) | EMODnet WMTS layer `baselayer` (World Base Layer), tile matrix set `web_mercator` (EPSG:3857): `tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png` (ResourceURL `{TileMatrix}/{TileCol}/{TileRow}` = z/x/y) | ≤15 (matrix set levels 0–15) | CC BY 4.0, "EMODnet Bathymetry Consortium" |
+| EMODnet depth overlay (`emodnet_depth`) | WMS `ows.emodnet-bathymetry.eu/wms`, layer `emodnet:mean_multicolour`, EPSG:3857, PNG transparent | ≤14 (~115 m grid) | CC BY 4.0, "EMODnet Bathymetry Consortium" |
+| GEBCO depth overlay (`gebco_depth`) | WMS `wms.gebco.net/mapserv`, layer `GEBCO_LATEST_2` (grid colour-shaded for elevation), EPSG:3857 | ≤12 (~460 m grid) | Public domain, attribution requested: "GEBCO Compilation Group, GEBCO Grid" |
+| Seamarks (`seamarks`) | `tiles.openseamap.org/seamark/{z}/{x}/{y}.png` | ≤18 | CC BY-SA, "© OpenSeaMap contributors" |
+
+- **WMS as tiles**: overlays are rendered with flutter_map's `WMSTileLayerOptions`
+  (WMS 1.1.1, 256 px, BBOX = the Web Mercator tile). `TileProvider.getTileUrl`
+  builds the WMS URL, and our `CachingTileProvider` keys its disk cache by
+  `layer.key/z/x/y`, so overlays are cached and downloadable offline exactly like
+  XYZ layers; `WmsSource.getMapUrl(z, x, y)` builds the same request without a
+  widget (for downloads).
+- **Drawing**: overlays at opacity 0.55 between base map and seamarks; in the night
+  theme the whole tile stack goes through the red night filter.
+- **Why these layers**: `baselayer` is the only EMODnet WMTS layer with global
+  coverage in Web Mercator (the `mean_*` WMTS layers are European only and blank
+  elsewhere); it is a shaded relief whose colour ramp spans the oceans, so shallow
+  coastal water looks pale — combine it with the EMODnet overlay for anchoring
+  depths. `mean_multicolour` gives the most contrast in 0–100 m; contours
+  (`emodnet:contours`) were tried and add little at anchorage scale.
+  `GEBCO_LATEST_2` is GEBCO's current colour-coded grid and supports
+  GetFeatureInfo.
+- **Charted depth** (`DepthService`, `lib/services/map/depth_service.dart`):
+  WMS GetFeatureInfo on `emodnet:mean` (`INFO_FORMAT=application/json`; property
+  `Depth` is an *elevation*: negative = water, positive = land, exactly 0 = no
+  data), falling back to GEBCO `GEBCO_LATEST_2` (`text/plain`, `value_list`, also
+  elevation). GEBCO's MapServer only answers when the queried pixel is on a grid
+  cell centre, so the query is centred on the 15″ cell containing the point.
+  5 s timeout per request; null on land / no data / offline. EMODnet land is
+  final (GEBCO is coarser). Both servers send `Access-Control-Allow-Origin: *`,
+  so lookups also work on the web.
+- **Drop anchor prefill**: when the panel opens or the anchor moves ≥ 25 m
+  (debounced 600 ms) the charted depth at the anchor is looked up and shown as
+  "Charted depth ≈ 6.2 m (EMODnet) — check your sounder". It fills the depth field
+  (and so the suggested radius) unless the user already changed the depth in this
+  panel session; values under 1 m (grid cells on the coastline) are only shown,
+  never used.
 
 ## Offline charts
 

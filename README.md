@@ -8,7 +8,8 @@ runs low, a loud alarm sounds.
 - Product spec: [docs/SPEC.md](docs/SPEC.md) (captured from the project's planning doc)
 - Design, scope and alarm defaults: [docs/DESIGN.md](docs/DESIGN.md)
 - What to verify on real phones: [docs/DEVICE_TESTING.md](docs/DEVICE_TESTING.md)
-- Demo video (1:44, narrated, GPS simulator): [docs/anchor-alarm-demo.mp4](docs/anchor-alarm-demo.mp4)
+- Demo video (2 min, narrated, GPS simulator on a real chart): [docs/anchor-alarm-demo.mp4](docs/anchor-alarm-demo.mp4)
+- **Try it in the browser: https://bergl.github.io/anchor-alarm/** (real GPS + real chart; deployed from `main`)
 
 ## Status
 
@@ -26,13 +27,21 @@ Phase 1 — **core anchor watch** — is implemented:
 | Profiles: Lunch stop / Overnight / Storm watch + custom | ✅ |
 | Learn-swing *suggestion* during the first 15 min (never auto-applied) | ✅ |
 | History with track, alerts, notes | ✅ |
-| OpenStreetMap + OpenSeaMap seamarks + satellite; offline tile cache and area download (mobile) | ✅ |
+| OpenStreetMap + OpenSeaMap seamarks + satellite; EMODnet depth relief; EMODnet / GEBCO depth overlays; Layers picker | ✅ |
+| Charted depth at the anchor (EMODnet → GEBCO) pre-fills Drop anchor | ✅ |
+| Chart saved for offline use around the anchor automatically when a watch starts (mobile); manual area download | ✅ |
 | Day / red night theme, metric/imperial | ✅ |
 | Web: full app in the foreground + **GPS simulator** (swing, drag, glitches, poor GPS, GPS loss) | ✅ |
 
 Next phases (designed for, not built): remote monitoring & sharing (backend not yet
 chosen — everything goes through `RemoteSync`), weather & forecast alerts, NMEA/AIS,
 sensor fusion.
+
+## Screenshots
+
+| Chart + seamarks | EMODnet depth overlay | Depth relief |
+|---|---|---|
+| ![chart](docs/screenshots/map-chart.png) | ![depth overlay](docs/screenshots/map-depth-overlay.png) | ![bathymetry](docs/screenshots/map-bathymetry.png) |
 
 ## Run it
 
@@ -69,4 +78,4 @@ unsigned iOS build.
 ## Map data
 
 © OpenStreetMap contributors · Seamarks © OpenSeaMap · Imagery © Esri, Maxar, Earthstar
-Geographics. Bulk tile download is deliberately limited (OSM tile usage policy).
+Geographics · Bathymetry © EMODnet Bathymetry Consortium · © GEBCO Compilation Group. Bulk tile download is deliberately limited (OSM tile usage policy).
