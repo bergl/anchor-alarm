@@ -2,6 +2,7 @@ import 'package:sembast/sembast.dart';
 
 import '../../app/app_settings.dart';
 import '../../domain/models.dart';
+import '../../domain/weather.dart';
 import 'repositories.dart';
 
 /// Store names and keys of the app database.
@@ -20,6 +21,10 @@ abstract final class AppStores {
   /// Track points, auto-increment int key, value = {sid, ...TrackPoint.toJson}.
   static final track = intMapStoreFactory.store('track');
   static const sessionIdField = 'sid';
+
+  /// Single record [weatherKey] holding the last [Forecast] JSON.
+  static final weather = stringMapStoreFactory.store('weather');
+  static const weatherKey = 'last';
 }
 
 Map<String, Object?> _mutable(Map<String, Object?> v) =>
@@ -168,4 +173,27 @@ class SembastSessionRepository implements SessionRepository {
     final records = await AppStores.track.find(_db, finder: _trackFinder(sessionId));
     return [for (final r in records) TrackPoint.fromJson(_mutable(r.value))];
   }
+}
+
+class SembastWeatherRepository implements WeatherRepository {
+  SembastWeatherRepository(this._db);
+
+  final Database _db;
+
+  RecordRef<String, Map<String, Object?>> get _record =>
+      AppStores.weather.record(AppStores.weatherKey);
+
+  @override
+  Future<Forecast?> load() async {
+    final v = await _record.get(_db);
+    if (v == null) return null;
+    try {
+      return Forecast.fromJson(_mutable(v));
+    } catch (_) {
+      return null; // Unreadable cache: just fetch again.
+    }
+  }
+
+  @override
+  Future<void> save(Forecast forecast) => _record.put(_db, forecast.toJson());
 }

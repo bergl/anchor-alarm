@@ -9,11 +9,13 @@ import 'sembast_repositories.dart';
 class AppDatabase {
   AppDatabase(this.db)
       : settings = SembastSettingsRepository(db),
-        sessions = SembastSessionRepository(db);
+        sessions = SembastSessionRepository(db),
+        weather = SembastWeatherRepository(db);
 
   final Database db;
   final SettingsRepository settings;
   final SessionRepository sessions;
+  final WeatherRepository weather;
 
   Future<void> close() => db.close();
 }

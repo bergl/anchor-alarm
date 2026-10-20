@@ -9,6 +9,7 @@ import '../../domain/models.dart';
 import '../theme/app_theme.dart';
 import '../ui_providers.dart';
 import 'state_banner.dart';
+import 'weather_line.dart';
 
 /// Bottom card on the map: the watch status, or the "Drop anchor" button.
 class StatusHud extends ConsumerWidget {
@@ -159,6 +160,7 @@ class _WatchingStatus extends ConsumerWidget {
             const _BatteryMetric(),
           ],
         ),
+        const WeatherLine(),
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(

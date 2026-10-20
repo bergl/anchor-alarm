@@ -33,6 +33,10 @@ class AppSettings {
     this.keepScreenOn = false,
     this.useSimulator = false,
     this.onboardingDone = false,
+    this.weatherAlerts = true,
+    this.gustWarnKn = 25,
+    this.windWarnKn = 20,
+    this.waveWarnM = 1.5,
   });
 
   final DistanceUnit distanceUnit;
@@ -52,6 +56,15 @@ class AppSettings {
   final bool useSimulator;
   final bool onboardingDone;
 
+  /// Notify about forecast gusts, wind, wind shifts, waves and pressure
+  /// drops while watching (informational, never the drag alarm).
+  final bool weatherAlerts;
+
+  /// Forecast alert thresholds: gusts and sustained wind in knots, waves in m.
+  final double gustWarnKn;
+  final double windWarnKn;
+  final double waveWarnM;
+
   AppSettings copyWith({
     DistanceUnit? distanceUnit,
     DistanceUnit? depthUnit,
@@ -65,6 +78,10 @@ class AppSettings {
     bool? keepScreenOn,
     bool? useSimulator,
     bool? onboardingDone,
+    bool? weatherAlerts,
+    double? gustWarnKn,
+    double? windWarnKn,
+    double? waveWarnM,
   }) =>
       AppSettings(
         distanceUnit: distanceUnit ?? this.distanceUnit,
@@ -79,6 +96,10 @@ class AppSettings {
         keepScreenOn: keepScreenOn ?? this.keepScreenOn,
         useSimulator: useSimulator ?? this.useSimulator,
         onboardingDone: onboardingDone ?? this.onboardingDone,
+        weatherAlerts: weatherAlerts ?? this.weatherAlerts,
+        gustWarnKn: gustWarnKn ?? this.gustWarnKn,
+        windWarnKn: windWarnKn ?? this.windWarnKn,
+        waveWarnM: waveWarnM ?? this.waveWarnM,
       );
 
   Map<String, Object?> toJson() => {
@@ -94,6 +115,10 @@ class AppSettings {
         'keepScreenOn': keepScreenOn,
         'useSimulator': useSimulator,
         'onboardingDone': onboardingDone,
+        'weatherAlerts': weatherAlerts,
+        'gustWarnKn': gustWarnKn,
+        'windWarnKn': windWarnKn,
+        'waveWarnM': waveWarnM,
       };
 
   factory AppSettings.fromJson(Map<String, Object?> j) {
@@ -115,6 +140,10 @@ class AppSettings {
       keepScreenOn: j['keepScreenOn'] as bool? ?? d.keepScreenOn,
       useSimulator: j['useSimulator'] as bool? ?? d.useSimulator,
       onboardingDone: j['onboardingDone'] as bool? ?? d.onboardingDone,
+      weatherAlerts: j['weatherAlerts'] as bool? ?? d.weatherAlerts,
+      gustWarnKn: (j['gustWarnKn'] as num?)?.toDouble() ?? d.gustWarnKn,
+      windWarnKn: (j['windWarnKn'] as num?)?.toDouble() ?? d.windWarnKn,
+      waveWarnM: (j['waveWarnM'] as num?)?.toDouble() ?? d.waveWarnM,
     );
   }
 }

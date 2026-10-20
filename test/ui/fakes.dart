@@ -13,6 +13,7 @@ import 'package:anchor_alarm/services/location/location_source.dart';
 import 'package:anchor_alarm/services/map/depth_service.dart';
 import 'package:anchor_alarm/services/map/tile_layer_spec.dart';
 import 'package:anchor_alarm/services/storage/repositories.dart';
+import 'package:anchor_alarm/services/weather/weather_service.dart';
 import 'package:anchor_alarm/ui/map/tile_layers.dart';
 import 'package:anchor_alarm/ui/ui_providers.dart';
 import 'package:anchor_alarm/ui/widgets/permission_notice.dart';
@@ -220,6 +221,8 @@ class TestEnv {
   final AppSettings initialSettings;
   final wakeCalls = <bool>[];
   final depth = FakeDepthService();
+  final weather = FakeWeatherService();
+  final weatherRepo = MemoryWeatherRepository();
 
   List<Override> overrides({WatchController Function()? controller}) => [
         initialSettingsProvider.overrideWithValue(initialSettings),
@@ -237,6 +240,25 @@ class TestEnv {
         tileCacheSizeProvider.overrideWith((ref) async => 2 * 1024 * 1024),
         openSettingsProvider.overrideWithValue(({bool location = false}) async {}),
         depthServiceProvider.overrideWithValue(depth),
+        weatherServiceProvider.overrideWithValue(weather),
+        weatherRepositoryProvider.overrideWithValue(weatherRepo),
         if (controller != null) watchControllerProvider.overrideWith(controller),
       ];
+}
+
+/// Weather without network: returns [result] (offline by default) and
+/// records the queried positions.
+class FakeWeatherService extends WeatherService {
+  FakeWeatherService({this.result = const WeatherError('offline'), this.respond});
+  WeatherResult result;
+
+  /// When set, answers instead of [result] (e.g. a forecast fetched "now").
+  WeatherResult Function(LatLng p)? respond;
+  final queries = <LatLng>[];
+
+  @override
+  Future<WeatherResult> fetch(LatLng p) async {
+    queries.add(p);
+    return respond?.call(p) ?? result;
+  }
 }

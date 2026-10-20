@@ -106,3 +106,17 @@ String formatCountdown(Duration d) {
   final s = d.inSeconds < 0 ? 0 : d.inSeconds;
   return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 }
+
+// ---- Weather ---------------------------------------------------------------
+
+/// Age of data, e.g. "just now", "25 min ago", "3 h ago", "2 days ago".
+String formatAge(Duration d) {
+  if (d.inMinutes < 2) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+  if (d.inHours < 48) return '${d.inHours} h ago';
+  return '${d.inDays} days ago';
+}
+
+/// "Forecast from 14:05, 3 h ago".
+String formatForecastAge(DateTime fetchedAt, DateTime now) =>
+    'Forecast from ${formatTime(fetchedAt.toLocal())}, ${formatAge(now.difference(fetchedAt))}';

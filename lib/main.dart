@@ -40,6 +40,7 @@ Future<void> main() async {
       appDatabaseProvider.overrideWithValue(database),
       settingsRepositoryProvider.overrideWithValue(database.settings),
       sessionRepositoryProvider.overrideWithValue(database.sessions),
+      weatherRepositoryProvider.overrideWithValue(database.weather),
       initialSettingsProvider.overrideWithValue(settings),
       initialCustomProfilesProvider.overrideWithValue(customProfiles),
       deviceLocationProvider.overrideWithValue(services.location),

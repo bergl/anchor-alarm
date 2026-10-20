@@ -35,7 +35,7 @@ build *now*, the decisions taken, and the defaults chosen.
   Web will later also be the remote-monitor viewer.
 
 **Deferred (designed for, not built):** remote monitoring & sharing (backend
-undecided), weather, NMEA/AIS, sensor fusion/compass-based glitch filtering,
+undecided), tides, NMEA/AIS, sensor fusion/compass-based glitch filtering,
 planning assistant, local experience layer.
 
 ## Decisions
@@ -70,6 +70,7 @@ lib/
     battery/            BatteryMonitor
     storage/            SettingsRepository, SessionRepository (sembast)
     map/                CachingTileProvider (+ web fallback), TileLayerSpec, DepthService
+    weather/            WeatherService (Open-Meteo forecast + marine)
     remote/             RemoteSync interface (no-op)
   app/           Riverpod providers + WatchController orchestrating it all
   ui/            screens and widgets
@@ -194,6 +195,81 @@ and "Download this map area" still downloads the visible area.
   null → set starts, set → null cancels) and catches everything; a failed or
   cancelled download never affects the anchor watch. A chip on the map shows
   progress (tap to stop) and a SnackBar confirms "Chart saved for offline use".
+
+## Weather
+
+Forecast wind, gusts, wind shifts, waves and pressure, so the skipper is warned
+*before* conditions change at anchor (Phase 4 of the spec).
+
+- **Source**: [Open-Meteo](https://open-meteo.com) — free, no API key, CORS
+  enabled (works on the web). Attribution "Weather data by Open-Meteo.com
+  (CC BY 4.0)" in the weather sheet and About.
+  - Forecast `api.open-meteo.com/v1/forecast`: `hourly=wind_speed_10m,
+    wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation,weather_code`,
+    `current=wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl`,
+    `wind_speed_unit=kn`, `timezone=auto`, `forecast_days=3`, `past_hours=3`.
+  - Marine `marine-api.open-meteo.com/v1/marine`: `hourly=wave_height,
+    wave_direction,wave_period` (same time parameters). Optional: an error,
+    inland point (all values null) or timeout just means "no waves".
+  - Times come back as local wall-clock ISO strings without offset plus
+    `utc_offset_seconds`; `WeatherService.parseTime` converts them to UTC.
+  - 10 s timeout per request; `fetch` never throws (`WeatherOk` /
+    `WeatherError`). Parsed into the pure-Dart `Forecast` model
+    (`lib/domain/weather.dart`), JSON-serialisable for the cache.
+- **Refresh policy** (`WeatherController`, `lib/app/weather_controller.dart`):
+  - Watch starts (or is restored): fetch for the **anchor**; then a 15-min
+    tick re-analyses and fetches again when the forecast is ≥ 3 h old or for a
+    place > 5 km away; after a failure it retries every 30 min. App resume
+    runs the same check. The refresh button fetches at once.
+  - Not watching: the weather sheet (map menu → Weather) and the Drop anchor
+    panel fetch for the **boat** if the forecast is missing, old (1 h / 3 h) or
+    > 5 km away; after a failure the UI waits 5 min before asking again.
+  - The last forecast is cached (sembast store `weather`, record `last`), so
+    offline the app still shows it: "Forecast from 14:05, 3 h ago", "Offline —
+    showing the last forecast".
+- **Analysis** (`analyzeWeather`, `lib/domain/weather_risk.dart`, pure Dart):
+  the current hour up to now + 24 h. Current conditions = the API's
+  `current` block if ≤ 1 h old, else the current hour. Max gust (+ time and
+  direction), max sustained wind, max wave height, first wind shift, largest
+  pressure fall.
+
+  | Alert | Rule | Default threshold |
+  |---|---|---|
+  | `strongGusts` | any hourly gust ≥ threshold | 25 kn (Settings → Weather) |
+  | `strongWind` | any hourly mean wind ≥ threshold | 20 kn (Settings) |
+  | `windShift` | direction changes by > 60° within 6 h, wind ≥ 10 kn at both ends (veer/back, from → to) | fixed |
+  | `highWaves` | any hourly wave height ≥ threshold | 1.5 m (Settings) |
+  | `pressureDrop` | MSL pressure falls ≥ 3 hPa within 3 h (also in the last 3 h) | fixed |
+
+  Each alert has an onset time (first hour over the threshold / the hour the
+  new direction is reached / the start of the first falling window), a peak
+  value and time, and a message such as "Gusts to 32 kn expected around 03:00
+  from NE (over 25 kn from 02:00)". All thresholds are inclusive (≥), the
+  shift angle is strict (> 60°).
+- **Notifications**: only while watching and with "Forecast alerts while
+  watching" on (default on). An alert is notified **2 h before its onset**, or
+  at once when it is closer or already happening, through
+  `NotificationService.showInfo` (default importance; several due together are
+  combined into one). Each event is notified once: same kind within ±3 h is
+  the same event, unless it gets clearly worse (+8 kn gusts/wind, +1 m waves,
+  +3 hPa). Forecasts older than 12 h raise no notifications. Weather alerts are
+  informational: **they never start the alarm siren** and are independent of
+  the drag alarm — a failed fetch never affects the watch.
+- **UI**: a line in the watching status ("Wind 12 kn NW · gusts 18 · max
+  28 kn 03:00", amber icon — red at night — when an alert is active; "· 4 h
+  old" when stale); tap → weather sheet (current conditions, alerts, 24 h wind
+  bar/gust chart drawn with a `CustomPainter`, hourly table with wind arrows,
+  waves when available, last update + refresh, offline/stale notices,
+  attribution). Drop anchor panel: one line "Next 12 h: wind veers NW→NE,
+  gusts to 24 kn".
+- **Limits**: model forecasts on a ~2–11 km grid — local effects (katabatic
+  gusts, bora under mountains, thunderstorms) can be much stronger than
+  forecast; the 15-min tick only runs while the app is alive (it is during a
+  watch, as a foreground service on Android); `timezone=auto` uses one UTC
+  offset per response, so on a DST-change night the hours after the change
+  can be off by one hour (switching to `timeformat=unixtime` would avoid it);
+  notification dedupe is in memory (an app restart may repeat one); no tides
+  yet.
 
 ## Platform notes
 

@@ -1,5 +1,6 @@
 import '../../app/app_settings.dart';
 import '../../domain/models.dart';
+import '../../domain/weather.dart';
 
 abstract class SettingsRepository {
   Future<AppSettings> load();
@@ -25,4 +26,26 @@ abstract class SessionRepository {
 
   Future<void> appendTrack(String sessionId, List<TrackPoint> points);
   Future<List<TrackPoint>> track(String sessionId);
+}
+
+/// The last fetched weather forecast, so it can be shown offline.
+abstract class WeatherRepository {
+  Future<Forecast?> load();
+  Future<void> save(Forecast forecast);
+}
+
+/// Keeps the forecast in memory only (tests, and when storage is unavailable).
+class MemoryWeatherRepository implements WeatherRepository {
+  MemoryWeatherRepository([this.forecast]);
+  Forecast? forecast;
+  int saves = 0;
+
+  @override
+  Future<Forecast?> load() async => forecast;
+
+  @override
+  Future<void> save(Forecast f) async {
+    saves++;
+    forecast = f;
+  }
 }

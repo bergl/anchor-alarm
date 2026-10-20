@@ -6,6 +6,7 @@ import '../screens/onboarding_screen.dart';
 import '../screens/profiles_screen.dart';
 import '../screens/settings_screen.dart';
 import 'offline_download.dart';
+import 'weather_sheet.dart';
 
 /// Navigation drawer: History, Profiles, Settings, Intro.
 class AppMenuDrawer extends ConsumerWidget {
@@ -36,6 +37,16 @@ class AppMenuDrawer extends ConsumerWidget {
                       style: theme.textTheme.titleLarge, overflow: TextOverflow.ellipsis),
                 ),
               ]),
+            ),
+            ListTile(
+              leading: const Icon(Icons.air),
+              title: const Text('Weather'),
+              subtitle: const Text('Wind, gusts and waves for the next 24 h'),
+              onTap: () {
+                final navContext = Navigator.of(context).context;
+                Navigator.pop(context);
+                showWeatherSheet(navContext);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.history),

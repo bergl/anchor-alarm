@@ -7,6 +7,7 @@ import '../../app/format.dart';
 import '../../app/providers.dart';
 import '../../domain/models.dart';
 import '../../services/map/tile_layer_spec.dart';
+import '../../services/weather/weather_service.dart';
 import '../ui_providers.dart';
 import '../widgets/map_layer_options.dart';
 import '../widgets/number_input.dart';
@@ -87,6 +88,44 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const _CacheSizeTile(),
           ],
+          const _Header('Weather'),
+          SwitchListTile(
+            secondary: const Icon(Icons.air),
+            title: const Text('Forecast alerts while watching'),
+            subtitle: const Text('Notify about strong gusts, wind shifts, waves and '
+                'falling pressure about 2 h ahead. Never sounds the anchor alarm.'),
+            isThreeLine: true,
+            value: s.weatherAlerts,
+            onChanged: (v) => update((x) => x.copyWith(weatherAlerts: v)),
+          ),
+          _ThresholdTile(
+            title: 'Gusts over',
+            value: s.gustWarnKn,
+            suffix: 'kn',
+            enabled: s.weatherAlerts,
+            min: 5,
+            max: 80,
+            onChanged: (v) => update((x) => x.copyWith(gustWarnKn: v)),
+          ),
+          _ThresholdTile(
+            title: 'Wind over',
+            value: s.windWarnKn,
+            suffix: 'kn',
+            enabled: s.weatherAlerts,
+            min: 5,
+            max: 80,
+            onChanged: (v) => update((x) => x.copyWith(windWarnKn: v)),
+          ),
+          _ThresholdTile(
+            title: 'Waves over',
+            value: s.waveWarnM,
+            suffix: 'm',
+            decimals: 1,
+            enabled: s.weatherAlerts,
+            min: 0.2,
+            max: 15,
+            onChanged: (v) => update((x) => x.copyWith(waveWarnM: v)),
+          ),
           const _Header('Boat'),
           _DistanceTile(
             title: 'Boat length',
@@ -131,6 +170,7 @@ class SettingsScreen extends ConsumerWidget {
                   'anchor watch.\n',
                 ),
                 for (final a in {for (final spec in TileLayerSpec.all) spec.attribution}) Text(a),
+                const Text(WeatherService.attribution),
               ],
             ),
           ),
@@ -323,4 +363,50 @@ class _CacheSizeTile extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// A weather alert threshold in knots or metres.
+class _ThresholdTile extends StatelessWidget {
+  const _ThresholdTile({
+    required this.title,
+    required this.value,
+    required this.suffix,
+    required this.onChanged,
+    required this.min,
+    required this.max,
+    this.decimals = 0,
+    this.enabled = true,
+  });
+
+  final String title;
+  final double value;
+  final String suffix;
+  final int decimals;
+  final double min;
+  final double max;
+  final bool enabled;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+        enabled: enabled,
+        contentPadding: const EdgeInsets.only(left: 72, right: 16),
+        title: Text(title),
+        trailing: Text(
+          '${value.toStringAsFixed(decimals)} $suffix',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        onTap: () async {
+          final v = await showNumberDialog(
+            context,
+            title: '$title ($suffix)',
+            initial: value,
+            suffix: suffix,
+            decimals: decimals,
+            min: min,
+            max: max,
+          );
+          if (v != null) onChanged(v.clamp(min, max).toDouble());
+        },
+      );
 }

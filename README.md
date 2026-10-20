@@ -30,11 +30,12 @@ Phase 1 — **core anchor watch** — is implemented:
 | OpenStreetMap + OpenSeaMap seamarks + satellite; EMODnet depth relief; EMODnet / GEBCO depth overlays; Layers picker | ✅ |
 | Charted depth at the anchor (EMODnet → GEBCO) pre-fills Drop anchor | ✅ |
 | Chart saved for offline use around the anchor automatically when a watch starts (mobile); manual area download | ✅ |
+| Weather (Open-Meteo): wind, gusts, waves, pressure for the next 24 h; forecast alerts (gusts, wind, wind shift, waves, pressure drop) ~2 h ahead while watching; works offline with the last forecast | ✅ |
 | Day / red night theme, metric/imperial | ✅ |
 | Web: full app in the foreground + **GPS simulator** (swing, drag, glitches, poor GPS, GPS loss) | ✅ |
 
 Next phases (designed for, not built): remote monitoring & sharing (backend not yet
-chosen — everything goes through `RemoteSync`), weather & forecast alerts, NMEA/AIS,
+chosen — everything goes through `RemoteSync`), tides, NMEA/AIS,
 sensor fusion.
 
 ## Screenshots
@@ -78,4 +79,5 @@ unsigned iOS build.
 ## Map data
 
 © OpenStreetMap contributors · Seamarks © OpenSeaMap · Imagery © Esri, Maxar, Earthstar
-Geographics · Bathymetry © EMODnet Bathymetry Consortium · © GEBCO Compilation Group. Bulk tile download is deliberately limited (OSM tile usage policy).
+Geographics · Bathymetry © EMODnet Bathymetry Consortium · © GEBCO Compilation Group ·
+Weather data by Open-Meteo.com (CC BY 4.0). Bulk tile download is deliberately limited (OSM tile usage policy).

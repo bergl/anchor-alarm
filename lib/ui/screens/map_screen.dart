@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../app/providers.dart';
 import '../../app/watch_controller.dart';
+import '../../app/weather_controller.dart';
 import '../map/anchor_map.dart';
 import '../ui_providers.dart';
 import '../widgets/alarm_overlay.dart';
@@ -147,6 +148,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         watchControllerProvider.select((s) => s.snapshot?.ringing ?? false));
     final watching = ref.watch(watchControllerProvider.select((s) => s.watching));
     final panel = ref.watch(mapPanelProvider);
+    // Keeps the weather controller alive: it fetches when a watch starts.
+    ref.listen(weatherControllerProvider, (_, _) {});
     final showDropPanel = panel == MapPanel.dropAnchor && !watching;
 
     ref.listen<bool>(watchControllerProvider.select((s) => s.resumed), (_, resumed) {

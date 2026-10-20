@@ -31,6 +31,8 @@ void main() {
     expect(env.settingsRepo.settings.autoOfflineMap, isFalse);
     expect(find.text('Download chart around me now'), findsOneWidget);
     expect(find.text('Download this map area'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('2.0 MB'), 200);
+    expect(find.text('2.0 MB'), findsOneWidget);
 
     await tester.scrollUntilVisible(find.text('Use GPS simulator (demo)'), 200);
     await tester.ensureVisible(find.text('Use GPS simulator (demo)'));
@@ -38,7 +40,6 @@ void main() {
     await tester.tap(find.text('Use GPS simulator (demo)'));
     await tester.pump();
     expect(env.settingsRepo.settings.useSimulator, isTrue);
-    expect(find.text('2.0 MB'), findsOneWidget);
   });
 
   testWidgets('test alarm starts and stops the alarm output', (tester) async {

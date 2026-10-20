@@ -13,6 +13,7 @@ import '../services/map/tile_cache.dart';
 import '../services/remote/remote_sync.dart';
 import '../services/storage/app_database.dart';
 import '../services/storage/repositories.dart';
+import '../services/weather/weather_service.dart';
 import 'app_settings.dart';
 
 // Platform services. Overridden in main() (and in tests) with real implementations.
@@ -136,3 +137,17 @@ final depthServiceProvider = Provider<DepthService>((ref) {
   ref.onDispose(s.close);
   return s;
 });
+
+// ---- Weather ---------------------------------------------------------------
+
+/// Open-Meteo forecast + marine data. Overridden in tests.
+final weatherServiceProvider = Provider<WeatherService>((ref) {
+  final s = WeatherService();
+  ref.onDispose(s.close);
+  return s;
+});
+
+/// Last forecast cache. Overridden in main() with the app database's
+/// repository; in memory otherwise (tests).
+final weatherRepositoryProvider =
+    Provider<WeatherRepository>((ref) => MemoryWeatherRepository());
