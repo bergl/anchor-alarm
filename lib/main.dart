@@ -14,7 +14,16 @@ import 'ui/app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final database = await openAppDatabase();
+  // Storage can be unavailable (private browsing, a sandboxed web preview).
+  // The anchor watch must still start, so fall back to memory: nothing is
+  // remembered across restarts, but every alarm works.
+  AppDatabase database;
+  try {
+    database = await openAppDatabase().timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('Storage unavailable, using memory: $e');
+    database = await openAppDatabase(inMemory: true);
+  }
   var settings = await database.settings.load();
   // Demo builds (`--dart-define=DEMO=true`, e.g. the hosted web preview) start
   // with the GPS simulator so the app can be tried without a boat.

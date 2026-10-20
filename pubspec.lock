@@ -305,10 +305,9 @@ packages:
   flutter_rotation_sensor:
     dependency: "direct main"
     description:
-      name: flutter_rotation_sensor
-      sha256: ac8041314414dd4ab07b4d629352715f1a6244f4414fe2cb15b4f435040fbf3c
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/flutter_rotation_sensor"
+      relative: true
+    source: path
     version: "0.4.0"
   flutter_test:
     dependency: "direct dev"

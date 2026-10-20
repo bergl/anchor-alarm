@@ -1,0 +1,87 @@
+import 'package:meta/meta.dart';
+
+import 'coordinate_system.dart';
+import 'orientation_event.dart';
+import 'reference_frame.dart';
+import 'rotation_sensor_method_channel.dart';
+import 'rotation_sensor_platform.dart';
+import 'rotation_sensor_web_stub.dart'
+    if (dart.library.js_interop_unsafe) 'rotation_sensor_web.dart';
+import 'sensor_interval.dart';
+import 'sensor_permission.dart';
+
+/// Provides access to the device's rotation sensor, offering a real-time stream
+/// of the device's orientation.
+///
+/// This class allows applications to retrieve a stream of [OrientationEvent]s
+/// which include the device's orientation represented as a rotation matrix,
+/// quaternion, and Euler angles (azimuth, pitch, roll).
+@sealed
+class RotationSensor {
+  /// Determines whether the rotation sensor is in diagnostic mode. If enabled,
+  /// the plugin logs more events for testing and debugging purposes.
+  static bool get diagnosticMode =>
+      RotationSensorPlatform.instance.diagnosticMode;
+
+  static set diagnosticMode(bool value) =>
+      RotationSensorPlatform.instance.diagnosticMode = value;
+
+  /// Determines whether the current platform is supported.
+  static bool get isPlatformSupported =>
+      RotationSensorMethodChannel.isPlatformSupported ||
+      RotationSensorWeb.isPlatformSupported;
+
+  /// Indicates whether the current platform exposes a runtime permission flow.
+  static bool get shouldRequestPermission =>
+      RotationSensorPlatform.instance.shouldRequestPermission;
+
+  /// Requests permission to access the orientation sensor, if needed.
+  static Future<SensorPermission> requestPermission() =>
+      RotationSensorPlatform.instance.requestPermission();
+
+  /// A broadcast [Stream] of [OrientationEvent]s which emits events containing
+  /// the orientation of the device from the device's rotation sensor.
+  static Stream<OrientationEvent> get orientationStream =>
+      RotationSensorPlatform.instance.orientationStream;
+
+  /// The [samplingPeriod] for the device's rotation sensor. The events may
+  /// arrive at a rate faster or slower than the [samplingPeriod], which is only
+  /// a hint to the system. The actual rate depends on the system's event queue
+  /// and sensor hardware capabilities.
+  ///
+  /// Defaults to [SensorInterval.normalInterval]. It can be set to other
+  /// predefined [SensorInterval] values or any [Duration] as needed to suit
+  /// different use cases such as gaming or UI responsiveness. When changing
+  /// this value, all existing listeners will be affected.
+  static Duration get samplingPeriod =>
+      RotationSensorPlatform.instance.samplingPeriod;
+
+  static set samplingPeriod(Duration value) =>
+      RotationSensorPlatform.instance.samplingPeriod = value;
+
+  /// The world [ReferenceFrame] from which the azimuth is measured.
+  ///
+  /// Defaults to [ReferenceFrame.magneticNorth]. When changing this value, all
+  /// existing listeners will be affected.
+  static ReferenceFrame get referenceFrame =>
+      RotationSensorPlatform.instance.referenceFrame;
+
+  static set referenceFrame(ReferenceFrame value) =>
+      RotationSensorPlatform.instance.referenceFrame = value;
+
+  /// The [coordinateSystem] used for upcoming [OrientationEvent].
+  ///
+  /// Defaults to [DisplayCoordinateSystem]. When changing this value, all
+  /// existing listeners will receive [OrientationEvent] in the new coordinate
+  /// system.
+  static CoordinateSystem get coordinateSystem =>
+      RotationSensorPlatform.instance.coordinateSystem;
+
+  static set coordinateSystem(CoordinateSystem value) =>
+      RotationSensorPlatform.instance.coordinateSystem = value;
+
+  static String get implementation =>
+      RotationSensorPlatform.instance.runtimeType.toString();
+
+  RotationSensor._();
+}
