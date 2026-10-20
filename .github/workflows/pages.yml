@@ -29,7 +29,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release --no-web-resources-cdn --base-href /anchor-alarm/
+      - name: Build (with Firebase config when the FIREBASE_DEFINES_JSON secret is set)
+        env:
+          FIREBASE_DEFINES_JSON: ${{ secrets.FIREBASE_DEFINES_JSON }}
+        run: flutter build web --release --no-web-resources-cdn --base-href /anchor-alarm/ $(.github/scripts/firebase-defines.sh)
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

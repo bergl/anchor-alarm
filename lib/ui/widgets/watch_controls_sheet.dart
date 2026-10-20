@@ -5,6 +5,8 @@ import '../../app/format.dart';
 import '../../app/providers.dart';
 import '../../app/watch_controller.dart';
 import '../screens/drop_anchor/drop_anchor_model.dart';
+import '../remote/share_watch_sheet.dart';
+import 'anchorage_check.dart';
 import 'profile_selector.dart';
 
 Future<void> showWatchControlsSheet(BuildContext context) => showModalBottomSheet<void>(
@@ -74,7 +76,22 @@ class _WatchControlsSheetState extends ConsumerState<WatchControlsSheet> {
                     .update((x) => x.copyWith(activeProfileId: p.id));
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            const ShareWatchTile(),
+            ListTile(
+              key: const ValueKey('checkAnchorage'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.travel_explore),
+              title: const Text('Check this anchorage'),
+              subtitle: const Text('Shelter, forecast exposure, nearby anchorages'),
+              onTap: () {
+                // The sheet's context goes away with it: open from the navigator's.
+                final nav = Navigator.of(context);
+                nav.pop();
+                showAnchorageCheckSheet(nav.context);
+              },
+            ),
+            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(

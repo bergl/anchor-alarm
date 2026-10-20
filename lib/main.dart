@@ -1,11 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/providers.dart';
+import 'app/remote_controllers.dart';
 import 'app/watch_controller.dart';
 import 'services/platform_services.dart';
+import 'services/remote/firebase_bootstrap.dart';
+import 'services/remote/firebase_config.dart';
+import 'services/remote/remote_models.dart';
 import 'services/storage/app_database.dart';
 import 'ui/app.dart';
 
@@ -35,6 +40,16 @@ Future<void> main() async {
   final services = createPlatformServices();
   await services.init();
 
+  // Remote monitoring (Firebase) only in builds with a Firebase
+  // configuration (--dart-define-from-file=firebase.json); null otherwise.
+  final remote = await startFirebaseRemote(
+    config: FirebaseConfig.fromEnvironment(),
+    database: database.db,
+  );
+  // Web: a share link (`#join=<watchId>.<key>`) opens "Monitor a boat".
+  final fragment = kIsWeb ? Uri.base.fragment : '';
+  final joinLink = fragment.contains('join=') ? ShareLink.parse(fragment) : null;
+
   final container = ProviderContainer(
     overrides: [
       appDatabaseProvider.overrideWithValue(database),
@@ -49,6 +64,11 @@ Future<void> main() async {
       notificationServiceProvider.overrideWithValue(services.notifications),
       batteryMonitorProvider.overrideWithValue(services.battery),
       failsafeProvider.overrideWithValue(services.failsafe),
+      if (remote != null) ...[
+        remoteServicesProvider.overrideWithValue(remote),
+        remoteSyncProvider.overrideWithValue(remote.sync),
+      ],
+      initialJoinLinkProvider.overrideWithValue(joinLink),
     ],
   );
 

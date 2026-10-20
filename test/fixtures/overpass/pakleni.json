@@ -1,0 +1,90 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API (hand-written fixture following the Overpass JSON format; approximate positions, not real OSM data)",
+  "osm3s": {
+    "timestamp_osm_base": "2026-10-20T12:00:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 1001,
+      "lat": 43.1594,
+      "lon": 16.3921,
+      "tags": {
+        "seamark:type": "anchorage",
+        "seamark:name": "Vinogradišće",
+        "seamark:anchorage:category": "unrestricted"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1002,
+      "lat": 43.1575,
+      "lon": 16.4005,
+      "tags": {
+        "seamark:type": "anchorage",
+        "name": "Palmižana"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2001,
+      "center": {"lat": 43.1636, "lon": 16.3972},
+      "nodes": [1, 2, 3, 4, 1],
+      "tags": {
+        "leisure": "marina",
+        "name": "ACI marina Palmižana",
+        "seamark:type": "harbour"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1003,
+      "lat": 43.1637,
+      "lon": 16.3970,
+      "tags": {
+        "leisure": "marina",
+        "name": "ACI marina Palmižana"
+      }
+    },
+    {
+      "type": "relation",
+      "id": 3001,
+      "center": {"lat": 43.1661, "lon": 16.4211},
+      "members": [],
+      "tags": {
+        "seamark:type": "anchorage",
+        "type": "multipolygon",
+        "name:hr": "Uvala Ždrilca"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1004,
+      "lat": 43.1700,
+      "lon": 16.3800,
+      "tags": {
+        "seamark:type": "anchor_berth"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1005,
+      "lat": 43.1650,
+      "lon": 16.3900,
+      "tags": {
+        "seamark:type": "buoy_lateral"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2002,
+      "nodes": [5, 6, 7],
+      "tags": {
+        "leisure": "marina",
+        "name": "No geometry"
+      }
+    }
+  ]
+}

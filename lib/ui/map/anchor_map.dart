@@ -10,6 +10,7 @@ import '../../domain/models.dart';
 import '../../services/location/simulated_location_source.dart';
 import '../theme/app_theme.dart';
 import '../ui_providers.dart';
+import 'assistant_layers.dart';
 import 'map_markers.dart';
 import 'tile_layers.dart';
 
@@ -219,6 +220,8 @@ class _AnchorMapState extends ConsumerState<AnchorMap> {
       ),
       children: [
         const MapTileLayers(),
+        // Swing preview, exposure rose, nearby anchorages (under the rings).
+        const AnchorageAssistantLayers(),
         if (track.length > 1)
           PolylineLayer(polylines: [
             Polyline(

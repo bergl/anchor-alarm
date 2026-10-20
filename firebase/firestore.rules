@@ -1,0 +1,148 @@
+rules_version = '2';
+
+// Anchor Alarm — remote monitoring. Data model: docs/DESIGN.md "Remote monitoring".
+//
+//   watches/{watchId}                 written by the boat (owner), read by watchers
+//   watches/{watchId}/watchers/{uid}  one per monitoring device; created with the
+//                                     share key from the link / QR code
+//
+// Everyone signs in anonymously. Knowing the watch id alone gives nothing: a
+// watcher document must carry the watch's current share key, and rotating the
+// key ("Stop sharing") locks out every existing watcher at once.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isTimestampOrNull(v) {
+      return v == null || v is timestamp;
+    }
+
+    function isNumberOrNull(v) {
+      return v == null || v is number;
+    }
+
+    function isPos(p) {
+      return p is map
+        && p.keys().hasAll(['lat', 'lon'])
+        && p.keys().hasOnly(['lat', 'lon', 'accuracyM'])
+        && p.lat is number && p.lat >= -90 && p.lat <= 90
+        && p.lon is number && p.lon >= -180 && p.lon <= 180
+        && (!('accuracyM' in p) || isNumberOrNull(p.accuracyM));
+    }
+
+    // 128-bit random key, RFC 4648 base32 without padding.
+    function isShareKey(k) {
+      return k is string && k.matches('^[A-Z2-7]{26}$');
+    }
+
+    function validWatch(d) {
+      return d.keys().hasAll(['ownerUid', 'shareKey', 'anchor', 'radiusM',
+            'warningRadiusM', 'state', 'reasons', 'ringing', 'updatedAt', 'startedAt'])
+        && d.keys().hasOnly(['ownerUid', 'shareKey', 'boatName', 'anchor', 'radiusM',
+            'warningRadiusM', 'boat', 'state', 'reasons', 'ringing', 'snoozedUntil',
+            'distanceM', 'updatedAt', 'startedAt', 'endedAt', 'appVersion',
+            'tzOffsetMin', 'lostContactNotifiedAt', 'endedReason'])
+        && d.ownerUid is string
+        && isShareKey(d.shareKey)
+        && (!('boatName' in d) || (d.boatName is string && d.boatName.size() <= 60))
+        && isPos(d.anchor)
+        && d.radiusM is number && d.radiusM > 0 && d.radiusM <= 5000
+        && d.warningRadiusM is number && d.warningRadiusM > 0 && d.warningRadiusM <= d.radiusM
+        && (!('boat' in d) || d.boat == null || isPos(d.boat))
+        && d.state in ['inactive', 'safe', 'warning', 'alarm']
+        && d.reasons is list && d.reasons.size() <= 6
+        && d.reasons.hasOnly(['nearEdge', 'drag', 'gpsLost', 'gpsPoor', 'lowBattery', 'criticalBattery'])
+        && d.ringing is bool
+        && (!('snoozedUntil' in d) || isTimestampOrNull(d.snoozedUntil))
+        && (!('distanceM' in d) || isNumberOrNull(d.distanceM))
+        && d.updatedAt == request.time
+        && d.startedAt is timestamp
+        && (!('endedAt' in d) || isTimestampOrNull(d.endedAt))
+        && (!('appVersion' in d) || (d.appVersion is string && d.appVersion.size() <= 32))
+        && (!('tzOffsetMin' in d) || (d.tzOffsetMin is int && d.tzOffsetMin >= -900 && d.tzOffsetMin <= 900));
+    }
+
+    match /watches/{watchId} {
+      function watcherDoc() {
+        return /databases/$(database)/documents/watches/$(watchId)/watchers/$(request.auth.uid);
+      }
+
+      function isOwner() {
+        return signedIn() && resource.data.ownerUid == request.auth.uid;
+      }
+
+      // A watcher whose key still matches the current share key.
+      function isWatcher() {
+        return signedIn()
+          && exists(watcherDoc())
+          && get(watcherDoc()).data.key == resource.data.shareKey;
+      }
+
+      allow get: if isOwner() || isWatcher();
+      // No listing: watch ids are only learnt from a share link.
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && validWatch(request.resource.data)
+        && !('lostContactNotifiedAt' in request.resource.data)
+        && !('endedReason' in request.resource.data);
+
+      // Server-maintained fields (lostContactNotifiedAt, endedReason) are
+      // written by Cloud Functions only.
+      allow update: if isOwner()
+        && validWatch(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['ownerUid', 'lostContactNotifiedAt', 'endedReason']);
+
+      allow delete: if isOwner();
+
+      match /watchers/{uid} {
+        function parent() {
+          return get(/databases/$(database)/documents/watches/$(watchId)).data;
+        }
+
+        function isParentOwner() {
+          return signedIn() && parent().ownerUid == request.auth.uid;
+        }
+
+        function validTokens(t) {
+          return t is list && t.size() <= 10;
+        }
+
+        // The watcher itself, and the owner (to show / remove watchers).
+        allow get: if signedIn() && (request.auth.uid == uid || isParentOwner());
+        allow list: if isParentOwner();
+
+        // Joining: only for yourself, only with the current share key.
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['key', 'fcmTokens', 'platform', 'addedAt'])
+          && request.resource.data.keys().hasOnly(['key', 'fcmTokens', 'platform', 'addedAt', 'name'])
+          && request.resource.data.key == parent().shareKey
+          && validTokens(request.resource.data.fcmTokens)
+          && request.resource.data.platform in ['android', 'ios', 'web', 'other']
+          && request.resource.data.addedAt == request.time
+          && (!('name' in request.resource.data)
+              || (request.resource.data.name is string && request.resource.data.name.size() <= 60));
+
+        // A watcher may only refresh its own push tokens.
+        allow update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens'])
+          && validTokens(request.resource.data.fcmTokens);
+
+        // Leave (watcher) or remove / stop sharing (owner).
+        allow delete: if signedIn() && (request.auth.uid == uid || isParentOwner());
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

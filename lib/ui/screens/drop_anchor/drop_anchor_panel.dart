@@ -14,6 +14,7 @@ import '../../ui_providers.dart';
 import '../../widgets/number_input.dart';
 import '../../widgets/permission_notice.dart';
 import '../../widgets/profile_selector.dart';
+import '../../widgets/anchorage_check.dart';
 import '../../widgets/weather_line.dart';
 import 'drop_anchor_model.dart';
 import 'drop_anchor_providers.dart';
@@ -220,6 +221,12 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
                   ),
                 _ScopeHint(rodeM: form.rodeM, depthM: form.depthM, unit: dU),
                 const WeatherOutlookHint(),
+                AnchorageCheckCard(
+                  point: draft?.anchor,
+                  rodeM: form.rodeM,
+                  depthM: form.depthM,
+                  chartedDepth: form.chartedDepth,
+                ),
                 const SizedBox(height: 12),
                 Text('Alarm profile', style: theme.textTheme.labelLarge),
                 const SizedBox(height: 4),

@@ -6,6 +6,7 @@ import '../screens/onboarding_screen.dart';
 import '../screens/profiles_screen.dart';
 import '../screens/settings_screen.dart';
 import 'offline_download.dart';
+import '../remote/remote_menu_items.dart';
 import 'weather_sheet.dart';
 
 /// Navigation drawer: History, Profiles, Settings, Intro.
@@ -76,6 +77,7 @@ class AppMenuDrawer extends ConsumerWidget {
                   runOfflineDownload(navContext, ref);
                 },
               ),
+            const RemoteMenuItems(),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.help_outline),

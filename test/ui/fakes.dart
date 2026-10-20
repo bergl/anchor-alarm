@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anchor_alarm/app/anchorage_assistant.dart';
 import 'package:anchor_alarm/app/app_settings.dart';
 import 'package:anchor_alarm/app/providers.dart';
 import 'package:anchor_alarm/app/watch_controller.dart';
@@ -10,7 +11,10 @@ import 'package:anchor_alarm/services/battery/battery_monitor.dart';
 import 'package:anchor_alarm/services/failsafe/failsafe.dart';
 import 'package:anchor_alarm/services/heading/heading_source.dart';
 import 'package:anchor_alarm/services/location/location_source.dart';
+import 'package:anchor_alarm/domain/water_mask.dart';
+import 'package:anchor_alarm/services/map/anchorage_service.dart';
 import 'package:anchor_alarm/services/map/depth_service.dart';
+import 'package:anchor_alarm/services/map/landmask_service.dart';
 import 'package:anchor_alarm/services/map/tile_layer_spec.dart';
 import 'package:anchor_alarm/services/storage/repositories.dart';
 import 'package:anchor_alarm/services/weather/weather_service.dart';
@@ -223,6 +227,8 @@ class TestEnv {
   final depth = FakeDepthService();
   final weather = FakeWeatherService();
   final weatherRepo = MemoryWeatherRepository();
+  final landMask = FakeLandMaskService();
+  final anchorages = FakeAnchorageService();
 
   List<Override> overrides({WatchController Function()? controller}) => [
         initialSettingsProvider.overrideWithValue(initialSettings),
@@ -242,6 +248,8 @@ class TestEnv {
         depthServiceProvider.overrideWithValue(depth),
         weatherServiceProvider.overrideWithValue(weather),
         weatherRepositoryProvider.overrideWithValue(weatherRepo),
+        landMaskServiceProvider.overrideWithValue(landMask),
+        anchorageServiceProvider.overrideWithValue(anchorages),
         if (controller != null) watchControllerProvider.overrideWith(controller),
       ];
 }
@@ -260,5 +268,33 @@ class FakeWeatherService extends WeatherService {
   Future<WeatherResult> fetch(LatLng p) async {
     queries.add(p);
     return respond?.call(p) ?? result;
+  }
+}
+
+/// Land mask without network: returns [mask] (none by default).
+class FakeLandMaskService extends LandMaskService {
+  FakeLandMaskService({this.mask});
+  WaterMask? mask;
+  final queries = <LatLng>[];
+
+  @override
+  WaterMask? cached(LatLng p) => null;
+
+  @override
+  Future<WaterMask?> maskAround(LatLng p) async {
+    queries.add(p);
+    return mask;
+  }
+}
+
+/// Nearby anchorages without network (unavailable by default).
+class FakeAnchorageService implements AnchorageService {
+  List<NearbyAnchorage>? result;
+  final queries = <LatLng>[];
+
+  @override
+  Future<List<NearbyAnchorage>?> nearby(LatLng p, {double radiusM = 5000}) async {
+    queries.add(p);
+    return result;
   }
 }

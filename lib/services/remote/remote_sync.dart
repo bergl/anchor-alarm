@@ -1,8 +1,9 @@
 import '../../domain/models.dart';
 import '../../domain/watch_engine.dart';
 
-/// Publishes the anchor watch for remote monitoring. Backend not chosen yet
-/// (see DESIGN.md); [NoopRemoteSync] is used until then.
+/// Publishes the anchor watch for remote monitoring (see DESIGN.md "Remote
+/// monitoring"). [FirestoreRemoteSync] when the build has a Firebase
+/// configuration, [NoopRemoteSync] otherwise.
 abstract class RemoteSync {
   Future<void> publish(AnchorSession session, WatchSnapshot snapshot);
   Future<void> end(AnchorSession session);

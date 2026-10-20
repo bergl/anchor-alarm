@@ -32,11 +32,14 @@ build *now*, the decisions taken, and the defaults chosen.
 - Day / night (red) theme; units metric + knots by default, switchable.
 - **Web**: full app in the foreground (with a "keep this tab open" warning) and a
   **GPS simulator** (drift / drag / swing / GPS loss scenarios) for demos and testing.
-  Web will later also be the remote-monitor viewer.
+  Web is also a remote-monitor viewer (see "Remote monitoring").
 
-**Deferred (designed for, not built):** remote monitoring & sharing (backend
-undecided), tides, NMEA/AIS, sensor fusion/compass-based glitch filtering,
-planning assistant, local experience layer.
+**Built later (2026-10-20):** remote monitoring & sharing on Firebase — see
+"Remote monitoring" below (needs a Firebase project: docs/FIREBASE_SETUP.md).
+
+**Deferred (designed for, not built):** tides, NMEA/AIS, sensor fusion/compass-based glitch filtering,
+full planning assistant (an MVP *Anchoring assistant* is built — see below),
+local experience layer.
 
 ## Decisions
 
@@ -51,7 +54,7 @@ planning assistant, local experience layer.
 | Settings | `shared_preferences` | Simple key-value |
 | Alarm sound | `audioplayers` looping asset + `vibration` + `wakelock_plus` | |
 | Notifications | `flutter_local_notifications` (alarm channel, full-screen intent on Android, time-sensitive on iOS) | Spec |
-| Backend | **Deferred.** All cloud access goes through a `RemoteSync` interface (no-op for now) | User decision |
+| Backend | **Firebase**: Firestore + anonymous Auth + Cloud Messaging + Cloud Functions (Blaze). All cloud access goes through `RemoteSync` / `RemoteWatchStore`; builds without Firebase config use the no-op | User decision (2026-10-20) |
 | Licensing | GPL dependencies are acceptable | User decision |
 | Language | English only, `intl`-ready | User decision |
 
@@ -71,7 +74,8 @@ lib/
     storage/            SettingsRepository, SessionRepository (sembast)
     map/                CachingTileProvider (+ web fallback), TileLayerSpec, DepthService
     weather/            WeatherService (Open-Meteo forecast + marine)
-    remote/             RemoteSync interface (no-op)
+    remote/             RemoteSync → FirestoreRemoteSync, RemoteWatchStore (Firestore),
+                        PushService (FCM), FirebaseConfig (dart-defines)
   app/           Riverpod providers + WatchController orchestrating it all
   ui/            screens and widgets
 ```
@@ -271,6 +275,91 @@ Forecast wind, gusts, wind shifts, waves and pressure, so the skipper is warned
   notification dedupe is in memory (an app restart may repeat one); no tides
   yet.
 
+## Anchoring assistant
+
+*Advisory only — not navigation-grade.* An MVP of the spec's "Anchoring
+Planning Assistant" / "suggestion mode": is this spot sheltered from the
+wind that is coming, where will the boat swing, have I been here before?
+
+- **Where**: the *Anchorage check* card in the Drop anchor panel (collapsed
+  to one line, e.g. "Exposed to SW gusts 25 kn at 03:00" / "Good shelter for
+  the forecast NE 15 kn"; tap to expand), and while watching from the adjust
+  sheet → "Check this anchorage" (bottom sheet, map stays visible).
+- **Land mask** (`LandMaskService`, `lib/services/map/landmask_service.dart`):
+  one WMS GetMap (WMS 1.1.1, EPSG:3857, PNG) for a 9 km square, 180 × 180 px
+  (50 m per pixel), centred on the position rounded to 0.005° so nearby
+  spots share one mask. Decoded with the `image` package (MIT, pure Dart,
+  works on the web) into a water/land bit mask (`WaterMask`,
+  `lib/domain/water_mask.dart`).
+  - EMODnet `emodnet:mean_multicolour`: water pixels are opaque, land and
+    no-data are fully transparent (alpha is exactly 0 or 255) → water =
+    alpha ≥ 128. (`emodnet:mean` comes back as an opaque palette image and
+    is useless for this.) Outside EMODnet coverage the whole image is
+    transparent.
+  - Fallback when EMODnet fails or shows no water at all: GEBCO
+    `GEBCO_LATEST_2` (global, opaque): sea is drawn in blues / pale cyans,
+    land in green → yellow → brown. Rule: water = B > R and 4·B ≥ 3·G;
+    it agrees with EMODnet on ~98 % of the pixels over the central
+    Mediterranean (the misses are the palest, shallowest coastal cells).
+    `GEBCO_LATEST_3` is *not* a land mask (it hides interpolated cells).
+    All land in both = genuinely inland.
+  - Cache: last 12 masks in memory, plus `<app support>/landmask/*.json`
+    (≈ 6 KB each, never expire) on mobile; the browser cache on the web.
+    10 s timeout, never throws (null = no shelter analysis).
+- **Exposure** (`computeExposure`, `lib/domain/exposure.dart`, pure Dart):
+  fetch (open-water distance to land) in 16 compass directions by marching
+  rays across the mask in half-pixel steps, capped at 4 km. Each sector is
+  the mean of 5 rays (±8°), so a narrow gap counts for its width and a
+  one-pixel islet does not close a sector. Rating: **sheltered** < 500 m,
+  **partly** < 2 km, **exposed** ≥ 2 km. If the anchor falls in a land /
+  no-data cell (coastline cell of the ~115 m grid), up to 150 m of land at
+  the start of each ray is skipped. Wind is evaluated by its *from*
+  direction: the upwind sector is the water the wind blows across.
+- **With the forecast** (`assessAnchorage`,
+  `lib/domain/anchorage_assessment.dart`): each hour of the next 24 h is
+  `exposed` when wind ≥ 12 kn blows from an exposed sector, `partly` when
+  ≥ 20 kn (or gusts ≥ 30 kn) come from a partly open sector. Consecutive
+  hours form windows → advice like "Exposed to SW (fetch 3.8 km): SW 18 kn
+  expected 02:00–06:00 — consider another anchorage." Rating: **poor** if an
+  exposed window reaches 15 kn or gusts 25 kn, **caution** for any other
+  window, **good** otherwise. Without a forecast: shelter only, no rating.
+  Without a mask: forecast only ("No shelter data · SW up to 18 kn"),
+  caution at ≥ 20 kn / gusts ≥ 25 kn.
+- **Map** (`AnchorageAssistantLayers`, flutter_map `PolygonLayer` /
+  `MarkerLayer` under the rings): the **swing preview** — a dashed wedge from
+  the anchor at the horizontal rode √(rode² − depth²) covering the smallest
+  arc that contains every downwind bearing of the next 12 forecast hours
+  (≥ 12° wide), with wind arrows every 3 h (Drop anchor flow; while watching
+  only when the check is open); the **exposure rose** — 16 wedges in a band
+  at 1.12–1.4 × the alarm radius, green / amber / red by day, three reds at
+  night, drawn only while the check is open; optional **nearby anchorage**
+  markers.
+- **Your log**: finished sessions within 500 m of the spot (count, drag
+  alarms, the place name you gave) — "You anchored here 2× before, no drag
+  alarms".
+- **Depth & scope**: the charted depth (`DepthService`) and the scope from
+  `scope.dart`.
+- **Nearby anchorages** (`AnchorageService`,
+  `lib/services/map/anchorage_service.dart`): OSM via the Overpass API
+  (`overpass-api.de/api/interpreter`, POST): `seamark:type=anchorage|
+  anchor_berth` and `leisure=marina` within 5 km (`nwr`, `out center tags`),
+  sorted by distance, same-name duplicates within 300 m merged, cached per
+  ~1 km. Unreachable / busy → "Unavailable". **Not verified live** (the
+  build environment cannot reach overpass-api.de; tested against a
+  hand-written fixture in the Overpass JSON format).
+- **Example — Pakleni channel (43.1673 N, 16.3942 E)**, EMODnet mask:
+  sheltered S–SW (Sv. Klement, ~300 m) and NNE (an islet / grid cell
+  ~100 m away); partly open N, NE, E, SE, WSW–W; exposed WNW–NNW (towards
+  Šolta and the Split channel, > 3.9 km) and ENE (the gap towards Hvar
+  town, 2.6 km). So: fine in jugo/SE winds for waves, uncomfortable in a
+  maestral (NW).
+- **Limits**: fetch only — no swell refraction, no surge through channels,
+  no katabatic gusts, no holding ground or bottom type; land mask from a
+  ~115 m depth grid (GEBCO ~460 m), so small islets, breakwaters and
+  marinas can be missing or merged; 4 km radius (beyond it everything
+  counts as open); forecast accuracy limits apply (see Weather). Shown as
+  advice — never part of the alarm.
+
 ## Platform notes
 
 - **Android**: `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`,
@@ -286,8 +375,150 @@ Forecast wind, gusts, wind shifts, waves and pressure, so the skipper is warned
 - **Web**: foreground only; Wake Lock API to keep the screen on; banner explaining
   the limitation.
 
-## Remote monitoring (future, backend-agnostic)
+## Remote monitoring
 
-`RemoteSync` will publish `{anchor, radius, warningRadius, boatPosition, state,
-updatedAt}` about every 5 s and on state changes, and subscribe by share code.
-Candidates: Firebase (Firestore + FCM), Supabase (+ FCM/APNs).
+Someone ashore (or on another boat) watches the anchor watch live and gets the
+alarm on their phone. Backend: **Firebase** (user decision). Setup steps:
+[FIREBASE_SETUP.md](FIREBASE_SETUP.md).
+
+**Off unless configured, opt-in per watch.** Firebase is configured only through
+compile-time defines (`--dart-define-from-file=firebase.json`,
+`lib/services/remote/firebase_config.dart`); no `google-services.json`,
+`GoogleService-Info.plist` or `firebase_options.dart` is committed, and the Google
+Services Gradle plugin is not needed (firebase_core initialises the native SDKs from
+the explicit `FirebaseOptions`; FCM notification messages are displayed by the
+system without a natively pre-initialised app). Without the defines the menu
+entries read "Remote monitoring is not configured in this build" and nothing
+Firebase is initialised. With them, nothing is uploaded until the user switches on
+**Share this watch** for the running watch.
+`--dart-define=USE_FIREBASE_EMULATOR=true` runs against the Emulator Suite
+(project `demo-anchor-alarm`).
+
+### Data model (Firestore)
+
+`watches/{watchId}` — written by the boat (owner), read by its watchers. `watchId`
+is a random 20-character id.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ownerUid` | string | anonymous Auth uid of the boat phone |
+| `shareKey` | string | 128-bit random, RFC 4648 base32 without padding (26 chars) |
+| `boatName` | string ≤ 60 | entered in the share sheet |
+| `anchor` | `{lat, lon}` | |
+| `radiusM`, `warningRadiusM` | number | 0 < warning ≤ radius ≤ 5000 |
+| `boat` | `{lat, lon, accuracyM}` \| null | averaged position used by the engine |
+| `state` | `inactive` \| `safe` \| `warning` \| `alarm` | |
+| `reasons` | list of `AlertReason` names | `nearEdge drag gpsLost gpsPoor lowBattery criticalBattery` |
+| `ringing` | bool | alarm sounding on the boat (false while snoozed) |
+| `snoozedUntil` | timestamp \| null | |
+| `distanceM` | number \| null | |
+| `updatedAt` | timestamp | **server time** (rules require `request.time`) |
+| `startedAt`, `endedAt` | timestamp, timestamp \| null | |
+| `appVersion` | string ≤ 32 | |
+| `tzOffsetMin` | int | boat's UTC offset, for "last update 14:05" in pushes |
+| `lostContactNotifiedAt` | timestamp | server only (functions) |
+| `endedReason` | string | server only: `abandoned` |
+
+`watches/{watchId}/watchers/{uid}` — one per monitoring device: `key` (must equal
+the watch's current `shareKey` to create), `fcmTokens[]` (≤ 10), `platform`
+(`android|ios|web|other`), `addedAt` (server time), optional `name`.
+
+Index: `watches (endedAt ASC, updatedAt ASC)` for the lost-contact query
+(`firebase/firestore.indexes.json`).
+
+On the device, the share record (`sessionId → watchId, shareKey, active`), the boat
+name and the list of monitored boats live in the app's sembast database (store
+`remote`), separate from `AnchorSession` — a restored watch keeps publishing to the
+same document.
+
+### Security rules (`firebase/firestore.rules`)
+
+- Everyone signs in anonymously; unauthenticated requests are denied.
+- Watch: **get** for the owner, and for a watcher whose watcher document exists
+  *and* whose key equals the current `shareKey` (so rotating the key locks all
+  watchers out at once); **list** for nobody (ids are only learnt from links);
+  **create** only with `ownerUid == auth.uid`; **update** only by the owner, never
+  changing `ownerUid` or the server fields; **delete** only by the owner. Every
+  write is type/size validated (`hasOnly` key list, lat/lon ranges, enum values,
+  `updatedAt == request.time`).
+- Watcher: **create** only for your own uid and only with the current share key
+  (checked with `get()` on the watch); **update** only your own `fcmTokens`;
+  **get** yourself or the owner; **list** the owner; **delete** yourself (leave) or
+  the owner (stop sharing).
+- Everything else is closed. Tested with `@firebase/rules-unit-testing`
+  (`firebase/functions/test/emulator/rules.test.ts`).
+
+### Boat side (`FirestoreRemoteSync`)
+
+The watch controller calls `publish` about every 5 s and on every alert event.
+`FirestoreRemoteSync` writes (`set(merge)`) only on a **material change** — state,
+reasons, ringing, snooze, anchor, radius, end, the boat moving ≥ 3 m or the distance
+changing ≥ 2 m — and otherwise a **heartbeat every 60 s**, so watchers can tell a
+quiet boat from a lost one. Writes are never awaited in the watch loop and never
+throw into it; Firestore's offline persistence (mobile) queues them while there is
+no signal. Sign-in failures are retried after 30 s. `end()` writes `endedAt`,
+`ringing: false`, `state: inactive`.
+
+**Stop sharing** writes a new `shareKey` + `endedAt` in one update (all links stop
+working; watchers get "watch ended"), then deletes the watcher documents. Sharing
+again creates a new watch document and link.
+
+Share link: `https://bergl.github.io/anchor-alarm/#join=<watchId>.<shareKey>` (also
+as QR code, `qr_flutter`, BSD-3). The code part (`<watchId>.<shareKey>`) can be
+pasted or typed (case-insensitive, spaces/dashes ignored).
+
+### Monitor side
+
+*Monitor a boat* (menu) joins with a link or code: it creates the watcher document
+with the key and this device's FCM token (after asking for notification
+permission), then shows the live view: map with anchor, rings and boat, state
+banner, distance, and the age of the last update — "updated 12 s ago", amber after
+30 s, red **Lost contact** after 3 min. On the web, opening a `#join=` link starts
+this directly.
+
+While the app runs, every monitored boat has a live listener (`RemoteAlarmHost`
+around the app). When a boat's watch **rings**, this device sounds its own alarm
+(`AlarmOutput`, active profile's sound) and shows a full-screen alarm with
+**Silence (here)** — that only silences this device (nothing is written to the
+boat); it rings again when a new alarm reason appears or the boat rings again after
+it stopped. The watch controller and the monitors share the siren; each stops only
+a siren it started itself.
+
+### Pushes (Cloud Functions, `firebase/functions`, Node 22, functions v2, europe-west1)
+
+- `onWatchUpdated` (`onDocumentUpdated('watches/{watchId}')`): pushes to all
+  watcher tokens when `ringing` goes false → true or a new alarm reason (`drag`,
+  `gpsLost`, `criticalBattery`) appears — high priority, Android channel
+  `anchor_alarm` (max importance, alarm audio; created by the app), default sound,
+  APNs `interruption-level: time-sensitive` (critical alerts need an Apple
+  entitlement; prepared as a comment). Data: `{watchId, state, reason, distanceM,
+  kind, boatName}`. Also pushes "watch ended" (normal priority, `anchor_info`) and
+  "contact restored" (the flag is cleared in a transaction so it is sent once).
+  Warnings (near edge, poor GPS, low battery) are not pushed.
+- `checkLostContact` (every 5 min): active watches whose `updatedAt` is older than
+  3 min get one "Lost contact with <boat> — last update 14:05" push (high priority,
+  `anchor_warning`) and `lostContactNotifiedAt`; watches silent for 48 h are ended
+  (`endedReason: abandoned`).
+- Tokens FCM reports as unregistered / invalid are removed from the watcher
+  documents.
+- The decisions are pure functions (`src/logic.ts`, unit tested); the Firestore /
+  FCM side (`src/notify.ts`) is tested against the Firestore + Functions emulators
+  (FCM is replaced by an outbox collection in the emulator).
+
+Background / closed app: the pushes are FCM *notification* messages, displayed by
+Android (on the app's channel) and iOS without running Dart. In the foreground the
+live view handles the alarm; pushes for boats without a live view become a local
+notification.
+
+**Limitations / follow-ups**
+- Web push is not implemented: it needs a `firebase-messaging-sw.js` carrying the
+  project config next to the notifications plugin's service worker. The web
+  monitor alarms only while the tab is open (`FIREBASE_VAPID_KEY` is read but
+  unused).
+- FCM registration tokens are deprecated in favour of Firebase Installation IDs
+  (`register()`/`onRegistered`, Admin SDK `fids`); tokens still work, migrating is
+  a small follow-up.
+- iOS needs the Push Notifications capability and an APNs key (Apple Developer
+  account) — see FIREBASE_SETUP.md; Android needs nothing extra.
+- A monitor that rings on Android only while the app process lives; when it is
+  closed the push notification (alarm channel, full volume) is the alert.

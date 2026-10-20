@@ -51,3 +51,9 @@ app.*.map.json
 android/key.properties
 *.jks
 *.keystore
+
+# Firebase: real dart-define file (template: firebase.example.json), emulator logs
+/firebase.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

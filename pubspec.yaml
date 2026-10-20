@@ -51,6 +51,8 @@ dependencies:
   intl: ^0.20.3
   shared_preferences: ^2.5.6
   http: ^1.6.0
+  # PNG decoding for the land mask (MIT, pure Dart, works on the web).
+  image: ^4.5.4
   path: ^1.9.1
   flutter_rotation_sensor: ^0.4.0
   clock: ^1.1.3

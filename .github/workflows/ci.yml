@@ -12,6 +12,9 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.47.7'
+  # Optional: the Firebase dart-define JSON (docs/FIREBASE_SETUP.md). Without
+  # it the app builds with remote monitoring switched off.
+  FIREBASE_DEFINES_JSON: ${{ secrets.FIREBASE_DEFINES_JSON }}
 
 jobs:
   test:
@@ -27,7 +30,7 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build web --release --no-web-resources-cdn
+      - run: flutter build web --release --no-web-resources-cdn $(.github/scripts/firebase-defines.sh)
       - uses: actions/upload-artifact@v7
         with:
           name: web
@@ -49,7 +52,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --debug
+      - run: flutter build apk --debug $(.github/scripts/firebase-defines.sh)
       - uses: actions/upload-artifact@v7
         with:
           name: android-debug-apk
@@ -91,8 +94,9 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
           export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/upload.jks"
           flutter pub get
-          flutter build appbundle --release --build-number=${{ github.run_number }}
-          flutter build apk --release --build-number=${{ github.run_number }}
+          DEFINES="$(.github/scripts/firebase-defines.sh)"
+          flutter build appbundle --release --build-number=${{ github.run_number }} $DEFINES
+          flutter build apk --release --build-number=${{ github.run_number }} $DEFINES
       - uses: actions/upload-artifact@v7
         if: steps.signing.outputs.enabled == 'true'
         with:
@@ -113,4 +117,31 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
+      - run: flutter build ios --release --no-codesign $(.github/scripts/firebase-defines.sh)
+
+  functions:
+    name: Cloud Functions + Firestore rules
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebase/functions
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firebase/functions/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('firebase/functions/package-lock.json') }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # Rules + function integration tests on the Firebase Emulator Suite.
+      - run: npm run test:emulator

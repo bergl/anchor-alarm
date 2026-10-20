@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/app_settings.dart';
 import '../app/providers.dart';
 import '../app/watch_controller.dart';
+import 'remote/remote_alarm_host.dart';
 import 'screens/map_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
@@ -34,7 +35,11 @@ class AnchorAlarmApp extends ConsumerWidget {
       theme: light,
       darkTheme: dark,
       themeMode: mode,
-      builder: (context, child) => _ScreenWake(child: child ?? const SizedBox()),
+      navigatorKey: rootNavigatorKey,
+      // A `#join=...` share link is not a route: the navigator falls back to
+      // home and RemoteAlarmHost opens the link.
+      builder: (context, child) =>
+          _ScreenWake(child: RemoteAlarmHost(child: child ?? const SizedBox())),
       home: onboarded
           ? MapScreen(restoreOnStart: restoreOnStart)
           : const OnboardingScreen(),

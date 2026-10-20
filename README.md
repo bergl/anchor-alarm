@@ -31,11 +31,12 @@ Phase 1 — **core anchor watch** — is implemented:
 | Charted depth at the anchor (EMODnet → GEBCO) pre-fills Drop anchor | ✅ |
 | Chart saved for offline use around the anchor automatically when a watch starts (mobile); manual area download | ✅ |
 | Weather (Open-Meteo): wind, gusts, waves, pressure for the next 24 h; forecast alerts (gusts, wind, wind shift, waves, pressure drop) ~2 h ahead while watching; works offline with the last forecast | ✅ |
+| Anchoring assistant: *Anchorage check* in Drop anchor (and "Check this anchorage" while watching) — shelter by sector from the EMODnet/GEBCO land mask (fetch in 16 directions), forecast exposure for 24 h, swing preview arc on the map, depth & scope, your own history here, nearby OSM anchorages (advisory only) | ✅ nearby anchorages unverified live |
+| Remote monitoring: *Share this watch* (opt-in, QR code / link) → *Monitor a boat* on another phone or the web: live map, state, "updated 12 s ago" / lost contact, local alarm with *Silence (here)*; push alarms, "lost contact" and "watch ended" via Cloud Functions (Firebase: Firestore + anonymous Auth + FCM) | ✅ built, needs a Firebase project — [setup](docs/FIREBASE_SETUP.md) |
 | Day / red night theme, metric/imperial | ✅ |
 | Web: full app in the foreground + **GPS simulator** (swing, drag, glitches, poor GPS, GPS loss) | ✅ |
 
-Next phases (designed for, not built): remote monitoring & sharing (backend not yet
-chosen — everything goes through `RemoteSync`), tides, NMEA/AIS,
+Next phases (designed for, not built): tides, NMEA/AIS,
 sensor fusion.
 
 ## Screenshots
@@ -43,6 +44,10 @@ sensor fusion.
 | Chart + seamarks | EMODnet depth overlay | Depth relief |
 |---|---|---|
 | ![chart](docs/screenshots/map-chart.png) | ![depth overlay](docs/screenshots/map-depth-overlay.png) | ![bathymetry](docs/screenshots/map-bathymetry.png) |
+
+| Anchorage check (Pakleni islands) |
+|---|
+| ![anchorage check](docs/screenshots/anchorage-check.png) |
 
 ## Run it
 
@@ -70,11 +75,18 @@ lib/app/       Riverpod providers, WatchController (location → engine → alar
 lib/services/  platform glue: location, compass, alarm audio, notifications, battery,
                fail-safe (Android boot receiver), storage (sembast), map tile cache, simulator
 lib/ui/        screens and widgets
+firebase/      Firestore rules + indexes, Cloud Functions (TypeScript) for remote monitoring
 test/          domain, controller, storage and widget tests
 ```
 
 CI (`.github/workflows/ci.yml`): analyze, test, web build, Android debug APK and an
-unsigned iOS build.
+unsigned iOS build (with the Firebase config when the `FIREBASE_DEFINES_JSON` secret is
+set), plus Cloud Functions / security-rules tests on the Firebase Emulator Suite.
+
+Remote monitoring needs a Firebase project and a build with its config:
+`flutter run --dart-define-from-file=firebase.json` — see
+[docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md). Without it the app runs as before
+and shows "Remote monitoring is not configured in this build".
 
 ## Map data
 

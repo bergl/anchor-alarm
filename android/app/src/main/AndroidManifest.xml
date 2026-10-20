@@ -85,6 +85,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Remote monitoring pushes (firebase_messaging): the white anchor as
+             the small icon, and a fallback channel for messages without one
+             (the functions always name anchor_alarm / anchor_warning /
+             anchor_info, created by the app at start-up). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_anchor" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="anchor_info" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

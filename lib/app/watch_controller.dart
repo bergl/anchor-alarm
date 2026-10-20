@@ -101,6 +101,9 @@ class WatchController extends Notifier<WatchViewState> {
 
   /// Alert notifications currently shown.
   final Set<AlertReason> _shownAlerts = {};
+
+  /// The siren is sounding for this watch.
+  bool _sirenOn = false;
   DateTime _lastPersist = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastPublish = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastTrackFlush = DateTime.fromMillisecondsSinceEpoch(0);
@@ -246,6 +249,7 @@ class WatchController extends Notifier<WatchViewState> {
     _ticker?.cancel();
     await _batterySub?.cancel();
     final ended = e.session.copyWith(endedAt: _now(), notes: notes, name: name);
+    _sirenOn = false;
     await ref.read(alarmOutputProvider).stopAlarm();
     await ref.read(notificationServiceProvider).cancelAll();
     _shownAlerts.clear();
@@ -319,10 +323,16 @@ class WatchController extends Notifier<WatchViewState> {
       );
       if (!ev.reason.isAlarm) alarm.chime(vibrate: profile.vibrate);
     }
-    if (snap.ringing && !alarm.isRinging) {
-      alarm.startAlarm(sound: profile.sound, vibrate: profile.vibrate);
-    } else if (!snap.ringing && alarm.isRinging) {
-      alarm.stopAlarm();
+    // Only stop a siren this watch started: the same output also sounds
+    // alarms of boats monitored remotely from this device.
+    if (snap.ringing) {
+      if (!alarm.isRinging) {
+        alarm.startAlarm(sound: profile.sound, vibrate: profile.vibrate);
+      }
+      _sirenOn = true;
+    } else if (_sirenOn) {
+      _sirenOn = false;
+      if (alarm.isRinging) alarm.stopAlarm();
     }
     // Clear notifications of warnings that are no longer active and of
     // alarms that were acknowledged and have cleared.
