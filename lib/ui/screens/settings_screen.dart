@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../domain/models.dart';
 import '../../services/map/tile_layer_spec.dart';
 import '../ui_providers.dart';
+import '../widgets/map_layer_options.dart';
 import '../widgets/number_input.dart';
 import '../widgets/offline_area_settings.dart';
 import '../widgets/offline_download.dart';
@@ -75,23 +76,7 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => update((x) => x.copyWith(depthUnit: v)),
           ),
           const _Header('Map'),
-          _SegmentTile<BaseMap>(
-            icon: Icons.map_outlined,
-            title: 'Base map',
-            value: s.baseMap,
-            options: const {
-              BaseMap.osm: 'Chart',
-              BaseMap.satellite: 'Satellite',
-              BaseMap.none: 'None',
-            },
-            onChanged: (v) => update((x) => x.copyWith(baseMap: v)),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.layers_outlined),
-            title: const Text('Seamarks (OpenSeaMap)'),
-            value: s.seamarks,
-            onChanged: (v) => update((x) => x.copyWith(seamarks: v)),
-          ),
+          const MapLayerOptions(),
           if (offlineDownloadSupported) ...[
             const OfflineAreaSettingsTiles(),
             ListTile(
@@ -145,7 +130,7 @@ class SettingsScreen extends ConsumerWidget {
                   'An aid to good seamanship — never a substitute for a proper '
                   'anchor watch.\n',
                 ),
-                for (final spec in TileLayerSpec.all) Text(spec.attribution),
+                for (final a in {for (final spec in TileLayerSpec.all) spec.attribution}) Text(a),
               ],
             ),
           ),

@@ -8,6 +8,7 @@ import '../map/anchor_map.dart';
 import '../ui_providers.dart';
 import '../widgets/alarm_overlay.dart';
 import '../widgets/app_menu.dart';
+import '../widgets/map_layer_options.dart';
 import '../widgets/offline_chart_chip.dart';
 import '../widgets/permission_notice.dart';
 import '../widgets/simulator_panel.dart';
@@ -189,11 +190,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ),
                         ),
                       ),
-                      _RoundButton(
-                        tooltip: 'Menu',
-                        icon: Icons.menu,
-                        onPressed: () => _scaffold.currentState?.openEndDrawer(),
-                      ),
+                      Column(mainAxisSize: MainAxisSize.min, children: [
+                        _RoundButton(
+                          tooltip: 'Menu',
+                          icon: Icons.menu,
+                          onPressed: () => _scaffold.currentState?.openEndDrawer(),
+                        ),
+                        const SizedBox(height: 8),
+                        _RoundButton(
+                          tooltip: 'Layers',
+                          icon: Icons.layers,
+                          onPressed: () => showLayerPicker(context),
+                        ),
+                      ]),
                     ],
                   ),
                   const SizedBox(height: 8),
