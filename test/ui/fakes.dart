@@ -10,6 +10,7 @@ import 'package:anchor_alarm/services/battery/battery_monitor.dart';
 import 'package:anchor_alarm/services/failsafe/failsafe.dart';
 import 'package:anchor_alarm/services/heading/heading_source.dart';
 import 'package:anchor_alarm/services/location/location_source.dart';
+import 'package:anchor_alarm/services/map/depth_service.dart';
 import 'package:anchor_alarm/services/map/tile_layer_spec.dart';
 import 'package:anchor_alarm/services/storage/repositories.dart';
 import 'package:anchor_alarm/ui/map/tile_layers.dart';
@@ -18,6 +19,7 @@ import 'package:anchor_alarm/ui/widgets/permission_notice.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:latlong2/latlong.dart';
 
 class FakeLocationSource implements LocationSource {
   final _ctrl = StreamController<PositionFix>.broadcast();
@@ -182,6 +184,19 @@ class FixedWatchController extends WatchController {
       LocationPermissionResult.always;
 }
 
+/// Charted depth without network: returns [sample] and records the queries.
+class FakeDepthService extends DepthService {
+  FakeDepthService({this.sample});
+  DepthSample? sample;
+  final queries = <LatLng>[];
+
+  @override
+  Future<DepthSample?> depthAt(LatLng p) async {
+    queries.add(p);
+    return sample;
+  }
+}
+
 /// Test settings: no network tiles, onboarding done.
 const testSettings = AppSettings(
   baseMap: BaseMap.none,
@@ -204,6 +219,7 @@ class TestEnv {
   final InMemorySessionRepository sessionRepo;
   final AppSettings initialSettings;
   final wakeCalls = <bool>[];
+  final depth = FakeDepthService();
 
   List<Override> overrides({WatchController Function()? controller}) => [
         initialSettingsProvider.overrideWithValue(initialSettings),
@@ -220,6 +236,7 @@ class TestEnv {
         failsafeProvider.overrideWithValue(const NoopFailsafe()),
         tileCacheSizeProvider.overrideWith((ref) async => 2 * 1024 * 1024),
         openSettingsProvider.overrideWithValue(({bool location = false}) async {}),
+        depthServiceProvider.overrideWithValue(depth),
         if (controller != null) watchControllerProvider.overrideWith(controller),
       ];
 }

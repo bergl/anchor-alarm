@@ -8,6 +8,7 @@ import '../map/anchor_map.dart';
 import '../ui_providers.dart';
 import '../widgets/alarm_overlay.dart';
 import '../widgets/app_menu.dart';
+import '../widgets/offline_chart_chip.dart';
 import '../widgets/permission_notice.dart';
 import '../widgets/simulator_panel.dart';
 import '../widgets/status_hud.dart';
@@ -181,7 +182,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       const Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: SimulatorChip(),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [SimulatorChip(), OfflineChartChip()],
+                          ),
                         ),
                       ),
                       _RoundButton(

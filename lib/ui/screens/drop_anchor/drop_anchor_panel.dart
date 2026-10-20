@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../app/app_settings.dart';
 import '../../../app/format.dart';
 import '../../../app/providers.dart';
 import '../../../app/watch_controller.dart';
+import '../../../domain/geo.dart';
 import '../../ui_providers.dart';
 import '../../widgets/number_input.dart';
 import '../../widgets/permission_notice.dart';
@@ -23,8 +27,20 @@ class DropAnchorPanel extends ConsumerStatefulWidget {
   ConsumerState<DropAnchorPanel> createState() => _DropAnchorPanelState();
 }
 
+/// Delay after the anchor position changes before its charted depth is
+/// looked up.
+const chartedDepthDebounce = Duration(milliseconds: 600);
+
+/// The anchor must move this far before the charted depth is looked up again
+/// (GPS jitter, and the settled anchor shifting when the depth changes).
+const _chartedDepthMoveM = 25.0;
+
 class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
   ProviderSubscription<AnchorDraft?>? _sync;
+  ProviderSubscription<LatLng?>? _anchorSub;
+  Timer? _depthTimer;
+  LatLng? _depthLookedUpAt;
+  int _depthSeq = 0;
 
   @override
   void initState() {
@@ -34,6 +50,28 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _push(ref.read(draftPreviewProvider));
     });
+    // Charted depth at the anchor, debounced.
+    _anchorSub = ref.listenManual<LatLng?>(
+      draftPreviewProvider.select((d) => d?.anchor),
+      (_, a) => _scheduleDepthLookup(a),
+      fireImmediately: true,
+    );
+  }
+
+  void _scheduleDepthLookup(LatLng? anchor) {
+    if (anchor == null) return;
+    final last = _depthLookedUpAt;
+    if (last != null && distanceM(last, anchor) < _chartedDepthMoveM) return;
+    _depthTimer?.cancel();
+    _depthTimer = Timer(chartedDepthDebounce, () => _lookupDepth(anchor));
+  }
+
+  Future<void> _lookupDepth(LatLng anchor) async {
+    final seq = ++_depthSeq;
+    _depthLookedUpAt = anchor;
+    final sample = await ref.read(depthServiceProvider).depthAt(anchor);
+    if (!mounted || seq != _depthSeq) return;
+    ref.read(dropAnchorFormProvider.notifier).applyChartedDepth(sample);
   }
 
   void _push(AnchorDraft? d) {
@@ -44,6 +82,8 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
   @override
   void dispose() {
     _sync?.close();
+    _anchorSub?.close();
+    _depthTimer?.cancel();
     super.dispose();
   }
 
@@ -158,10 +198,20 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
                       suffix: unitSuffix(depthU),
                       step: 1,
                       max: depthU == DistanceUnit.feet ? 300 : 100,
-                      onChanged: (v) => formCtrl.update((f) => f.copyWith(depthM: toMetres(v, depthU))),
+                      onChanged: (v) => formCtrl.setDepth(toMetres(v, depthU)),
                     ),
                   ),
                 ]),
+                if (form.chartedDepth case final charted?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Charted depth ≈ ${formatDistance(charted.depthM, depthU, decimals: 1)} '
+                      '(${charted.source}) — check your sounder',
+                      key: const ValueKey('chartedDepthCaption'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Text('Alarm profile', style: theme.textTheme.labelLarge),
                 const SizedBox(height: 4),

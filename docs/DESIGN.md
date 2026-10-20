@@ -105,6 +105,42 @@ same engine later run in a background isolate or on a server.
   but must still be acknowledged).
 - **Poor GPS**: averaged accuracy worse than the threshold for 2 min → warning.
 
+## Offline charts
+
+The chart must work at anchor without internet, so when a watch starts the app
+saves the chart around the anchor (Settings → Map → "Save chart around anchor
+automatically", on by default; mobile only — on the web the browser cache is
+all there is). "Download chart around me now" does the same around the boat,
+and "Download this map area" still downloads the visible area.
+
+- **Plan** (`OfflineAreaPlanner`, `lib/services/map/offline_area.dart`): three
+  square bands around the centre, for every active layer (base map, depth
+  overlay, seamarks — `activeTileLayers`), each capped at the layer's max native
+  zoom:
+
+  | Band | Zoom | Half side |
+  |---|---|---|
+  | overview | 10–12 | 15 km |
+  | approach | 13–15 | 3 km |
+  | anchorage | 16–17 | 600 m |
+
+  ≈190 tiles per layer at 43° N (osm + seamarks ≈380 tiles, ~4 MB; with the
+  EMODnet depth overlay ≈450), ≈570 per layer near 68° N.
+- **Limit**: a plan never exceeds the downloader's per-run limit
+  (`maxDownloadTiles` = 3000). Over budget, outer bands shrink first (to 5 km /
+  1 km), then the anchorage band (to 250 m), then outer bands are dropped, and
+  finally the anchorage loses zoom levels.
+- **Policy** (OSM tile usage policy): modest volumes only, at most 2 parallel
+  requests, identifying User-Agent, tiles younger than 30 days are not fetched
+  again, only one download runs at a time, and an area whose centre is within
+  500 m of one completed in the last 7 days (with the same layers) is not
+  downloaded again automatically (`offline_areas.json` in the tile cache
+  directory; clearing the cache forgets it).
+- **Isolation**: `OfflineAreaController` listens to the watch (session id
+  null → set starts, set → null cancels) and catches everything; a failed or
+  cancelled download never affects the anchor watch. A chip on the map shows
+  progress (tap to stop) and a SnackBar confirms "Chart saved for offline use".
+
 ## Platform notes
 
 - **Android**: `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`,

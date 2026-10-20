@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter_map/flutter_map.dart' show LatLngBounds;
 
+import '../../app/app_settings.dart';
+
 /// User-Agent sent with every tile request. The OSM tile usage policy
 /// (https://operations.osmfoundation.org/policies/tiles/) requires a valid,
 /// identifying User-Agent. (Browsers do not allow overriding it on the web.)
@@ -15,12 +17,14 @@ class TileLayerSpec {
     required this.attribution,
     this.maxNativeZoom = 19,
     this.transparent = false,
+    this.wms,
   });
 
   /// Stable id, also the cache directory name.
   final String key;
 
   /// URL with `{z}`, `{x}`, `{y}` placeholders (order as the server wants it).
+  /// For a WMS layer ([wms] set) this is the service base URL; use [url].
   final String urlTemplate;
   final String attribution;
 
@@ -31,10 +35,22 @@ class TileLayerSpec {
   /// valid empty tile, not an error.
   final bool transparent;
 
-  String url(int z, int x, int y) => urlTemplate
-      .replaceAll('{z}', '$z')
-      .replaceAll('{x}', '$x')
-      .replaceAll('{y}', '$y');
+  /// Set for a WMS layer: tiles are GetMap requests in EPSG:3857 whose BBOX
+  /// is the Web Mercator tile z/x/y (the same tiles flutter_map's
+  /// `WMSTileLayerOptions` requests), so they cache and download like XYZ.
+  final WmsSource? wms;
+
+  bool get isWms => wms != null;
+
+  /// Tile URL for z/x/y (XYZ template, or a WMS GetMap request).
+  String url(int z, int x, int y) {
+    final w = wms;
+    if (w != null) return w.getMapUrl(z, x, y);
+    return urlTemplate
+        .replaceAll('{z}', '$z')
+        .replaceAll('{x}', '$x')
+        .replaceAll('{y}', '$y');
+  }
 
   static const osm = TileLayerSpec(
     key: 'osm',
@@ -60,7 +76,106 @@ class TileLayerSpec {
     maxNativeZoom: 19,
   );
 
-  static const all = [osm, openSeaMap, esriSatellite];
+  /// EMODnet Bathymetry "World Base Layer" (WMTS, tile matrix set
+  /// `web_mercator` = EPSG:3857, levels 0-15): shaded sea-floor and land
+  /// relief, global. The WMTS ResourceURL is
+  /// `.../{TileMatrixSet}/{TileMatrix}/{TileCol}/{TileRow}.png`, i.e. z/x/y.
+  static const emodnetBase = TileLayerSpec(
+    key: 'emodnet_base',
+    urlTemplate:
+        'https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png',
+    attribution: 'EMODnet Bathymetry Consortium',
+    maxNativeZoom: 15,
+  );
+
+  /// EMODnet mean depth, multicolour ramp (WMS `emodnet:mean_multicolour`).
+  /// European seas only, ~115 m grid; transparent over land / outside.
+  static const emodnetDepth = TileLayerSpec(
+    key: 'emodnet_depth',
+    urlTemplate: emodnetWmsUrl,
+    attribution: 'EMODnet Bathymetry Consortium',
+    maxNativeZoom: 14,
+    transparent: true,
+    wms: WmsSource(baseUrl: '$emodnetWmsUrl?', layers: ['emodnet:mean_multicolour']),
+  );
+
+  /// GEBCO grid colour-shaded for elevation (WMS `GEBCO_LATEST_2`), global,
+  /// 15 arc-second (~460 m) grid.
+  static const gebcoDepth = TileLayerSpec(
+    key: 'gebco_depth',
+    urlTemplate: gebcoWmsUrl,
+    attribution: 'GEBCO Compilation Group, GEBCO Grid',
+    maxNativeZoom: 12,
+    transparent: true,
+    wms: WmsSource(baseUrl: '$gebcoWmsUrl?', layers: ['GEBCO_LATEST_2']),
+  );
+
+  static const all = [osm, openSeaMap, esriSatellite, emodnetBase, emodnetDepth, gebcoDepth];
+
+  static const emodnetWmsUrl = 'https://ows.emodnet-bathymetry.eu/wms';
+  static const gebcoWmsUrl = 'https://wms.gebco.net/mapserv';
+}
+
+/// Base map spec for [b] (null for [BaseMap.none]).
+TileLayerSpec? baseMapSpec(BaseMap b) => switch (b) {
+      BaseMap.osm => TileLayerSpec.osm,
+      BaseMap.satellite => TileLayerSpec.esriSatellite,
+      BaseMap.bathymetry => TileLayerSpec.emodnetBase,
+      BaseMap.none => null,
+    };
+
+/// Depth overlay spec for [d] (null for [DepthLayer.none]).
+TileLayerSpec? depthLayerSpec(DepthLayer d) => switch (d) {
+      DepthLayer.emodnet => TileLayerSpec.emodnetDepth,
+      DepthLayer.gebco => TileLayerSpec.gebcoDepth,
+      DepthLayer.none => null,
+    };
+
+/// The tile layers shown for [s], bottom to top: base map, depth overlay,
+/// seamarks. WMS overlays are included; [TileLayerSpec.url] gives their tile
+/// URLs, so they can be downloaded for offline use like any XYZ layer.
+List<TileLayerSpec> activeTileLayers(AppSettings s) => [
+      ?baseMapSpec(s.baseMap),
+      ?depthLayerSpec(s.depthLayer),
+      if (s.seamarks) TileLayerSpec.openSeaMap,
+    ];
+
+/// A WMS 1.1.1 GetMap source in EPSG:3857 with 256 px tiles.
+class WmsSource {
+  const WmsSource({
+    required this.baseUrl,
+    required this.layers,
+    this.styles = const [],
+    this.format = 'image/png',
+    this.version = '1.1.1',
+  });
+
+  /// Service URL ending in `?` (parameters are appended with `&`).
+  final String baseUrl;
+  final List<String> layers;
+  final List<String> styles;
+  final String format;
+  final String version;
+
+  static const _r = 20037508.342789244;
+
+  /// GetMap URL for Web Mercator tile z/x/y. Mirrors the parameter order of
+  /// flutter_map's `WMSTileLayerOptions.getUrl`.
+  String getMapUrl(int z, int x, int y, {int size = 256}) {
+    final span = 2 * _r / (1 << z);
+    final minX = -_r + x * span;
+    final maxX = minX + span;
+    final maxY = _r - y * span;
+    final minY = maxY - span;
+    return '$baseUrl&service=WMS&request=GetMap'
+        '&layers=${layers.map(Uri.encodeComponent).join(',')}'
+        '&styles=${styles.map(Uri.encodeComponent).join(',')}'
+        '&format=${Uri.encodeComponent(format)}'
+        '&srs=${Uri.encodeComponent('EPSG:3857')}'
+        '&version=${Uri.encodeComponent(version)}'
+        '&transparent=true&width=$size&height=$size'
+        '&bbox=$minX,$minY,$maxX,$maxY';
+  }
 }
 
 /// Upper limit for one "download this area" request. Bulk downloading from

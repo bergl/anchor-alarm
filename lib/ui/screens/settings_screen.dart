@@ -9,6 +9,7 @@ import '../../domain/models.dart';
 import '../../services/map/tile_layer_spec.dart';
 import '../ui_providers.dart';
 import '../widgets/number_input.dart';
+import '../widgets/offline_area_settings.dart';
 import '../widgets/offline_download.dart';
 import '../widgets/test_alarm.dart';
 
@@ -92,9 +93,10 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) => update((x) => x.copyWith(seamarks: v)),
           ),
           if (offlineDownloadSupported) ...[
+            const OfflineAreaSettingsTiles(),
             ListTile(
-              leading: const Icon(Icons.download_for_offline_outlined),
-              title: const Text('Download map for offline use'),
+              leading: const Icon(Icons.crop_free),
+              title: const Text('Download this map area'),
               subtitle: const Text('The area last shown on the map, a few zoom levels deep'),
               onTap: () => runOfflineDownload(context, ref),
             ),

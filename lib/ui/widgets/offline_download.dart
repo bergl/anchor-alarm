@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_settings.dart';
+import '../../app/offline_area_controller.dart';
 import '../../app/providers.dart';
 import '../../services/map/tile_cache.dart';
 import '../ui_providers.dart';
@@ -11,12 +12,9 @@ import '../ui_providers.dart';
 /// Whether "download this area" is available (not on the web).
 bool get offlineDownloadSupported => TileDownloader.supported;
 
-/// Layers to download: the selected base map plus seamarks when shown.
-List<TileLayerSpec> offlineLayers(AppSettings s) => [
-      if (s.baseMap == BaseMap.osm) TileLayerSpec.osm,
-      if (s.baseMap == BaseMap.satellite) TileLayerSpec.esriSatellite,
-      if (s.seamarks) TileLayerSpec.openSeaMap,
-    ];
+/// Layers to download: everything shown on the chart (base map, depth
+/// overlay, seamarks).
+List<TileLayerSpec> offlineLayers(AppSettings s) => activeTileLayers(s);
 
 /// Downloads the area currently visible on the main map, from the current
 /// zoom up to 3 levels deeper (fewer if that would exceed the tile limit).
@@ -32,6 +30,11 @@ Future<void> runOfflineDownload(BuildContext context, WidgetRef ref) async {
   }
   if (layers.isEmpty) {
     say('No map layers are switched on.');
+    return;
+  }
+  // One download at a time (the tile servers allow 2 parallel requests).
+  if (ref.read(offlineAreaProvider.notifier).busy) {
+    say('The chart is already being saved for offline use — try again when it is done.');
     return;
   }
   final downloader = ref.read(tileDownloaderProvider);
@@ -71,6 +74,7 @@ Future<void> runOfflineDownload(BuildContext context, WidgetRef ref) async {
   final progress = ValueNotifier<(int, int)>((0, tiles));
   final cancel = TileDownloadCancelToken();
   final nav = Navigator.of(context, rootNavigator: true);
+  final offline = ref.read(offlineAreaProvider.notifier)..externalStarted();
   showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -95,6 +99,7 @@ Future<void> runOfflineDownload(BuildContext context, WidgetRef ref) async {
   } catch (e) {
     say('Download failed: $e');
   } finally {
+    offline.externalEnded();
     nav.pop();
     progress.dispose();
     ref.invalidate(tileCacheSizeProvider);

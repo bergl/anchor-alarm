@@ -8,6 +8,7 @@ import '../services/failsafe/failsafe.dart';
 import '../services/heading/heading_source.dart';
 import '../services/location/location_source.dart';
 import '../services/location/simulated_location_source.dart';
+import '../services/map/depth_service.dart';
 import '../services/map/tile_cache.dart';
 import '../services/remote/remote_sync.dart';
 import '../services/storage/app_database.dart';
@@ -126,3 +127,12 @@ final tileDownloaderProvider =
 /// main keeps it informed via `setWatchActive` whenever watching changes.
 final failsafeProvider =
     Provider<Failsafe>((ref) => throw UnimplementedError('override'));
+
+// ---- Charted depth (bathymetry) ------------------------------------------
+
+/// Charted depth lookups (EMODnet, GEBCO fallback). Overridden in tests.
+final depthServiceProvider = Provider<DepthService>((ref) {
+  final s = DepthService();
+  ref.onDispose(s.close);
+  return s;
+});

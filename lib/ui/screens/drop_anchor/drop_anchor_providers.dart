@@ -3,6 +3,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../app/providers.dart';
 import '../../../app/watch_controller.dart';
+import '../../../services/map/depth_service.dart';
 import '../../ui_providers.dart';
 import 'drop_anchor_model.dart';
 
@@ -25,6 +26,13 @@ class DropAnchorFormController extends Notifier<DropAnchorForm> {
   }
 
   void update(DropAnchorForm Function(DropAnchorForm) change) => state = change(state);
+
+  /// Depth set by the user (never overwritten by charted depth afterwards).
+  void setDepth(double depthM) => state = state.withUserDepth(depthM);
+
+  /// Result of a charted depth lookup at the anchor position.
+  void applyChartedDepth(DepthSample? sample) =>
+      state = state.withChartedDepth(sample);
 
   /// Anchor placed or dragged on the map.
   void placeOnMap(LatLng p) =>

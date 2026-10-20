@@ -22,7 +22,19 @@ void main() {
     await tester.pump();
     expect(env.settingsRepo.settings.theme.name, 'night');
 
+    await tester.scrollUntilVisible(find.text('Save chart around anchor automatically'), 200);
+    await tester.ensureVisible(find.text('Save chart around anchor automatically'));
+    await tester.pump();
+    expect(find.textContaining('Downloads ~'), findsOneWidget);
+    await tester.tap(find.text('Save chart around anchor automatically'));
+    await tester.pump();
+    expect(env.settingsRepo.settings.autoOfflineMap, isFalse);
+    expect(find.text('Download chart around me now'), findsOneWidget);
+    expect(find.text('Download this map area'), findsOneWidget);
+
     await tester.scrollUntilVisible(find.text('Use GPS simulator (demo)'), 200);
+    await tester.ensureVisible(find.text('Use GPS simulator (demo)'));
+    await tester.pump();
     await tester.tap(find.text('Use GPS simulator (demo)'));
     await tester.pump();
     expect(env.settingsRepo.settings.useSimulator, isTrue);
