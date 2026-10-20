@@ -97,13 +97,15 @@ class LocalProjection {
 
   /// Returns (east, north) in metres relative to [origin].
   (double, double) toXY(LatLng p) {
-    final x = _rad(p.longitude - origin.longitude) * earthRadiusM * _cosLat;
+    // Wrap the longitude difference so points across the antimeridian stay local.
+    final dLon = _normalizeLon(p.longitude - origin.longitude);
+    final x = _rad(dLon) * earthRadiusM * _cosLat;
     final y = _rad(p.latitude - origin.latitude) * earthRadiusM;
     return (x, y);
   }
 
   LatLng fromXY(double x, double y) => LatLng(
         origin.latitude + _deg(y / earthRadiusM),
-        origin.longitude + _deg(x / (earthRadiusM * _cosLat)),
+        _normalizeLon(origin.longitude + _deg(x / (earthRadiusM * _cosLat))),
       );
 }

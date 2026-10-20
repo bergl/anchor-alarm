@@ -1,14 +1,51 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Location: precise fixes, plus "Allow all the time" for the watch with the
+         screen locked (Android 10+). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- geolocator's location foreground service keeps the Dart isolate alive.
+         (geolocator also merges FOREGROUND_SERVICE_LOCATION itself.) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Alerts -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Lets the user allow the alarm channel to bypass Do Not Disturb. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Raise the alarm stream volume while the siren rings. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Boot fail-safe: "Anchor watch interrupted by restart" notification. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Ask the user to exempt the app from Doze / battery optimisation. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM are intentionally NOT declared:
+         the app never schedules notifications (alerts are shown immediately
+         from the running watch), so flutter_local_notifications does not
+         need them. -->
+
     <application
-        android:label="anchor_alarm"
+        android:label="Anchor Alarm"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- showWhenLocked / turnScreenOn: the full-screen alarm notification
+             opens this activity over the lock screen and wakes the display. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
@@ -25,6 +62,29 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- flutter_local_notifications: notification action buttons
+             ("Silence"). -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
+
+        <!-- Boot fail-safe. directBootAware so LOCKED_BOOT_COMPLETED (before
+             the first unlock) can already post the notification; the flag is
+             kept in device-protected storage for that reason. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

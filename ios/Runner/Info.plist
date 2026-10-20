@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>anchor_alarm</string>
+	<string>Anchor Alarm</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -24,6 +24,15 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Anchor Alarm uses your location to watch your boat's position relative to the anchor and to raise an alarm if the anchor drags.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Choose "Always" so Anchor Alarm can keep watching your anchor and sound the alarm while the screen is locked or another app is open. Location is only used while an anchor watch is running.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>audio</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

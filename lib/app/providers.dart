@@ -4,10 +4,13 @@ import '../domain/models.dart';
 import '../services/alarm/alarm_output.dart';
 import '../services/alarm/notification_service.dart';
 import '../services/battery/battery_monitor.dart';
+import '../services/failsafe/failsafe.dart';
 import '../services/heading/heading_source.dart';
 import '../services/location/location_source.dart';
 import '../services/location/simulated_location_source.dart';
+import '../services/map/tile_cache.dart';
 import '../services/remote/remote_sync.dart';
+import '../services/storage/app_database.dart';
 import '../services/storage/repositories.dart';
 import 'app_settings.dart';
 
@@ -94,3 +97,32 @@ final activeProfileProvider = Provider<AlarmProfile>((ref) {
   final all = ref.watch(profilesProvider);
   return all.firstWhere((p) => p.id == id, orElse: () => AlarmProfile.builtIns[1]);
 });
+
+// ---- Storage & offline map (added by the storage/map integration) --------
+
+/// The opened local database. Overridden in main() with the instance from
+/// `openAppDatabase()`; [settingsRepositoryProvider] and
+/// [sessionRepositoryProvider] are overridden with its repositories.
+final appDatabaseProvider =
+    Provider<AppDatabase>((ref) => throw UnimplementedError('override'));
+
+/// Persistent tile cache (disk on mobile, no-op on web).
+///
+/// Create one `CachingTileProvider(layer: spec, cache: ref.watch(tileCacheProvider))`
+/// per `TileLayer` — flutter_map disposes the tile provider with its layer,
+/// so tile providers must not be shared.
+final tileCacheProvider = Provider<TileCache>((ref) {
+  final cache = TileCache();
+  ref.onDispose(cache.close);
+  return cache;
+});
+
+/// "Download this area" for offline use (unsupported on web, see
+/// `TileDownloader.supported`).
+final tileDownloaderProvider =
+    Provider<TileDownloader>((ref) => TileDownloader(ref.watch(tileCacheProvider)));
+
+/// Platform fail-safe (Android boot receiver etc.). Overridden in main();
+/// main keeps it informed via `setWatchActive` whenever watching changes.
+final failsafeProvider =
+    Provider<Failsafe>((ref) => throw UnimplementedError('override'));

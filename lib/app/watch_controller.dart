@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
@@ -96,6 +97,9 @@ class WatchController extends Notifier<WatchViewState> {
   Timer? _ticker;
   TrackRecorder _recorder = TrackRecorder();
   final List<TrackPoint> _pendingTrack = [];
+
+  /// Alert notifications currently shown.
+  final Set<AlertReason> _shownAlerts = {};
   DateTime _lastPersist = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastPublish = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastTrackFlush = DateTime.fromMillisecondsSinceEpoch(0);
@@ -121,10 +125,15 @@ class WatchController extends Notifier<WatchViewState> {
     return const WatchViewState();
   }
 
-  DateTime _now() => DateTime.now();
+  /// `clock` (package:clock) so tests can control time with fake_async.
+  DateTime _now() => clock.now();
 
   /// Restores a watch that was active when the app was last closed.
-  Future<void> restore() async {
+  /// Safe to call more than once: only the first call restores.
+  Future<void> restore() => _restoring ??= _restore();
+  Future<void>? _restoring;
+
+  Future<void> _restore() async {
     final s = await ref.read(sessionRepositoryProvider).loadActive();
     if (s == null || state.watching) return;
     _startEngine(s);
@@ -146,8 +155,17 @@ class WatchController extends Notifier<WatchViewState> {
     return res;
   }
 
+  int _subscribeGen = 0;
+
   Future<void> _subscribeLocation() async {
-    await _locSub?.cancel();
+    // Calls can overlap (build, _startEngine and requestPermission all
+    // resubscribe); only the newest one may listen, otherwise a stale
+    // subscription would keep delivering every fix a second time.
+    final gen = ++_subscribeGen;
+    final old = _locSub;
+    _locSub = null;
+    await old?.cancel();
+    if (gen != _subscribeGen || !ref.mounted) return;
     final src = ref.read(locationSourceProvider);
     state = state.copyWith(sourceLabel: src.label);
     _locSub = src.watch(background: state.watching).listen(
@@ -218,6 +236,7 @@ class WatchController extends Notifier<WatchViewState> {
     final ended = e.session.copyWith(endedAt: _now(), notes: notes, name: name);
     await ref.read(alarmOutputProvider).stopAlarm();
     await ref.read(notificationServiceProvider).cancelAll();
+    _shownAlerts.clear();
     await _flushTrack(ended.id);
     await ref.read(sessionRepositoryProvider).save(ended);
     await ref.read(remoteSyncProvider).end(ended);
@@ -256,7 +275,7 @@ class WatchController extends Notifier<WatchViewState> {
       state = state.copyWith(fix: fix);
       return;
     }
-    final snap = e.onFix(fix);
+    final snap = e.onFix(fix, receivedAt: _now());
     final p = _recorder.offer(fix, alarm: snap.state == WatchState.alarm);
     if (p != null) _pendingTrack.add(p);
     _handle(snap, fix: fix);
@@ -274,6 +293,7 @@ class WatchController extends Notifier<WatchViewState> {
     final unit = ref.read(settingsProvider).distanceUnit;
 
     for (final ev in snap.events) {
+      _shownAlerts.add(ev.reason);
       notes.showAlert(
         reason: ev.reason,
         title: alertTitle(ev.reason),
@@ -287,10 +307,12 @@ class WatchController extends Notifier<WatchViewState> {
     } else if (!snap.ringing && alarm.isRinging) {
       alarm.stopAlarm();
     }
-    // Clear notifications of warnings that are no longer active.
-    for (final r in AlertReason.values) {
-      if (!r.isAlarm && !snap.reasons.contains(r)) notes.cancelAlert(r);
+    // Clear notifications of warnings that are no longer active and of
+    // alarms that were acknowledged and have cleared.
+    for (final r in _shownAlerts.difference(snap.reasons)) {
+      notes.cancelAlert(r);
     }
+    _shownAlerts.retainAll(snap.reasons);
 
     state = state.copyWith(session: session, snapshot: snap, fix: fix);
 

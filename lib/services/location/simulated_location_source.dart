@@ -117,7 +117,8 @@ class SimulatedLocationSource implements LocationSource, HeadingSource {
     final wind = windFromDeg + 25 * math.sin(2 * math.pi * secs / 240);
     var a = anchor;
     if (_scenario == SimScenario.drag && _dragStart != null) {
-      final dragged = 0.4 * t.difference(_dragStart!).inMilliseconds / 1000.0;
+      final dragged =
+          0.4 * math.max(0, t.difference(_dragStart!).inMilliseconds) / 1000.0;
       a = destination(anchor, windFromDeg + 180, dragged);
     }
     final lie = rodeM + 2 * math.sin(2 * math.pi * secs / 37);

@@ -1,12 +1,12 @@
 {
-    "name": "anchor_alarm",
-    "short_name": "anchor_alarm",
+    "name": "Anchor Alarm",
+    "short_name": "Anchor Alarm",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#0B1F3A",
+    "theme_color": "#0B1F3A",
+    "description": "Anchor Alarm – anchor watch that sounds an alarm if your boat drags its anchor.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

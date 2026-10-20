@@ -12,6 +12,10 @@ const double maxUsableAccuracyM = 100;
 /// How long accuracy must stay poor before the poor-GPS warning is raised.
 const Duration poorGpsDelay = Duration(minutes: 2);
 
+/// Fixes farther than this (or 3x their own accuracy, if larger) from the
+/// median of the averaging window are treated as glitches and not averaged.
+const double outlierMinM = 20;
+
 /// Learn-swing parameters (see DESIGN.md).
 const Duration learnSwingPeriod = Duration(minutes: 15);
 const double learnSwingCap = 1.5;
@@ -86,7 +90,9 @@ class AnchorWatchEngine {
     required AnchorSession session,
     required DateTime now,
   })  : _session = session,
-        _startedAt = now,
+        // Learn swing runs during the first minutes of the *session*, not of
+        // this engine instance (which is rebuilt when a watch is resumed).
+        _startedAt = session.startedAt,
         _lastUsableFixAt = now,
         _maxDistanceM = session.maxDistanceM {
     _projection = LocalProjection(session.anchor);
@@ -116,6 +122,9 @@ class AnchorWatchEngine {
 
   /// Warning reasons active in the previous step, for rising-edge detection.
   Set<AlertReason> _prevWarnings = {};
+
+  /// Alarm conditions true in the previous step.
+  Set<AlertReason> _prevAlarms = {};
   DateTime? _snoozedUntil;
 
   AnchorSession get session => _session.copyWith(maxDistanceM: _maxDistanceM);
@@ -135,20 +144,22 @@ class AnchorWatchEngine {
     _recompute();
   }
 
-  WatchSnapshot onFix(PositionFix fix) {
+  /// Feeds a position fix. [receivedAt] is the system time the fix arrived
+  /// (defaults to the fix time). Timers such as GPS-lost run on the system
+  /// clock, so a fix whose own timestamp is far behind (a stale cached fix) is
+  /// not treated as a sign of a working GPS.
+  WatchSnapshot onFix(PositionFix fix, {DateTime? receivedAt}) {
     _lastFix = fix;
-    final now = fix.time;
+    final now = receivedAt ?? fix.time;
+    // A repeated or out-of-order fix carries no new information.
+    final repeated = _window.isNotEmpty && !fix.time.isAfter(_window.last.time);
+    final stale = repeated ||
+        now.difference(fix.time) >= Duration(seconds: _p.gpsLostSec);
 
-    if (fix.accuracyM > _p.poorAccuracyM) {
-      _poorSince ??= now;
-    } else {
-      _poorSince = null;
-    }
-
-    if (fix.accuracyM <= maxUsableAccuracyM) {
+    if (fix.accuracyM <= maxUsableAccuracyM && !stale) {
       _lastUsableFixAt = now;
       _window.add(fix);
-      _trimWindow(now);
+      _trimWindow(fix.time);
       _recompute();
     }
     return _evaluate(now);
@@ -195,9 +206,33 @@ class AnchorWatchEngine {
   /// Accuracy-weighted mean of the window, in a local projection around the anchor.
   void _recompute() {
     if (_window.isEmpty) return;
+    final xy = [for (final f in _window) _projection.toXY(f.position)];
+    // Outlier rejection: a single GPS jump that still reports good accuracy
+    // would otherwise drag the mean outside the ring for the whole averaging
+    // window, which is as long as the alarm delay. With 3+ fixes, ignore those
+    // far from the per-axis median (a real drag moves the median too).
+    final keep = List.filled(_window.length, true);
+    if (_window.length >= 3) {
+      double median(List<double> v) {
+        v.sort();
+        final n = v.length;
+        return n.isOdd ? v[n ~/ 2] : (v[n ~/ 2 - 1] + v[n ~/ 2]) / 2;
+      }
+
+      final mx = median([for (final p in xy) p.$1]);
+      final my = median([for (final p in xy) p.$2]);
+      for (var i = 0; i < _window.length; i++) {
+        final limit = math.max(outlierMinM, 3 * _window[i].accuracyM);
+        final dx = xy[i].$1 - mx, dy = xy[i].$2 - my;
+        if (dx * dx + dy * dy > limit * limit) keep[i] = false;
+      }
+      if (!keep.contains(true)) keep.fillRange(0, keep.length, true);
+    }
     double sx = 0, sy = 0, sw = 0, sacc = 0;
-    for (final f in _window) {
-      final (x, y) = _projection.toXY(f.position);
+    for (var i = 0; i < _window.length; i++) {
+      final f = _window[i];
+      if (!keep[i]) continue;
+      final (x, y) = xy[i];
       final acc = math.max(1.0, f.accuracyM);
       final w = 1 / (acc * acc);
       sx += x * w;
@@ -206,7 +241,7 @@ class AnchorWatchEngine {
       sacc += f.accuracyM;
     }
     _position = _projection.fromXY(sx / sw, sy / sw);
-    _accuracyM = sacc / _window.length;
+    _accuracyM = sacc / keep.where((k) => k).length;
     _distanceM = distanceM(_session.anchor, _position!);
   }
 
@@ -230,6 +265,16 @@ class AnchorWatchEngine {
     var radiusChanged = false;
     final gpsFresh =
         now.difference(_lastUsableFixAt) < Duration(seconds: _p.gpsLostSec);
+
+    // Poor GPS: averaged accuracy over the threshold, or the latest fix too
+    // inaccurate to be used at all.
+    final poorNow = (gpsFresh && (_accuracyM ?? 0) > _p.poorAccuracyM) ||
+        (_lastFix != null && _lastFix!.accuracyM > maxUsableAccuracyM);
+    if (poorNow) {
+      _poorSince ??= now;
+    } else {
+      _poorSince = null;
+    }
 
     if (_distanceM != null && gpsFresh) {
       final d = _distanceM!;
@@ -263,12 +308,15 @@ class AnchorWatchEngine {
     // Alarms: latch on rising edge.
     final alarmNow = _activeAlarmConditions(now);
     for (final r in alarmNow) {
-      if (_latched.add(r)) {
+      final rising = !_prevAlarms.contains(r);
+      if (_latched.add(r) || (rising && _snoozedUntil != null)) {
+        // A new alarm, or a snoozed one whose condition cleared and came back
+        // (boat returned inside and left again), rings immediately.
         events.add(AlertEvent(reason: r, time: now, distanceM: _distanceM));
-        // A new alarm reason overrides an existing snooze.
         _snoozedUntil = null;
       }
     }
+    _prevAlarms = alarmNow;
 
     // Warnings: not latched, reported while true.
     final delay = Duration(seconds: _p.alarmDelaySec);

@@ -72,3 +72,37 @@ String alertBody(AlertReason r, {double? distanceM, double? radiusM, DistanceUni
       AlertReason.lowBattery => 'Plug the phone in to keep the anchor watch running.',
       AlertReason.criticalBattery => 'Charge now — the anchor watch will stop when the battery dies.',
     };
+
+// ---- UI formatters (appended by the UI) ------------------------------------
+
+/// Short plain-words description of an alert, for the status banner.
+String alertShort(AlertReason r) => switch (r) {
+      AlertReason.drag => 'Anchor dragging — boat is outside the alarm ring',
+      AlertReason.nearEdge => 'Boat is near the edge of the swing circle',
+      AlertReason.gpsLost => 'GPS signal lost',
+      AlertReason.gpsPoor => 'GPS accuracy is poor',
+      AlertReason.lowBattery => 'Battery low — plug the phone in',
+      AlertReason.criticalBattery => 'Battery critical — charge now',
+    };
+
+/// Big banner word for a watch state.
+String stateLabel(WatchState s) => switch (s) {
+      WatchState.inactive => 'NOT WATCHING',
+      WatchState.safe => 'SAFE',
+      WatchState.warning => 'WARNING',
+      WatchState.alarm => 'ALARM',
+    };
+
+/// GPS accuracy as "±4 m".
+String formatAccuracy(double? m, DistanceUnit unit) =>
+    m == null ? '–' : '±${formatDistance(m, unit)}';
+
+/// Number only (no unit), converted to [unit], for big displays and inputs.
+String formatDistanceValue(double? m, DistanceUnit unit, {int decimals = 0}) =>
+    m == null ? '–' : fromMetres(m, unit).toStringAsFixed(decimals);
+
+/// Countdown like "1:45".
+String formatCountdown(Duration d) {
+  final s = d.inSeconds < 0 ? 0 : d.inSeconds;
+  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+}
