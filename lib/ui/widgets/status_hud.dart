@@ -113,6 +113,12 @@ class _WatchingStatus extends ConsumerWidget {
               child: SnoozeChip(until: snap!.snoozedUntil!, now: now),
             ),
           ),
+        if (snap?.swingSuggestionM != null && snap!.state != WatchState.alarm)
+          _SwingSuggestion(
+            maxDistanceM: snap.maxDistanceM,
+            suggestedM: snap.swingSuggestionM!,
+            unit: unit,
+          ),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -246,6 +252,51 @@ class SnoozeChip extends StatelessWidget {
       labelStyle: TextStyle(color: c.onState, fontWeight: FontWeight.w600),
       backgroundColor: c.warning,
       side: BorderSide.none,
+    );
+  }
+}
+
+/// Learn swing: offers a wider radius while the boat settles. Never applied
+/// automatically — the user confirms after checking the anchor holds.
+class _SwingSuggestion extends ConsumerWidget {
+  const _SwingSuggestion({
+    required this.maxDistanceM,
+    required this.suggestedM,
+    required this.unit,
+  });
+
+  final double maxDistanceM;
+  final double suggestedM;
+  final DistanceUnit unit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      color: theme.colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Boat swings out to ${formatDistance(maxDistanceM, unit)}. '
+                'If the anchor is holding, widen the alarm to '
+                '${formatDistance(suggestedM, unit)}.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: () =>
+                  ref.read(watchControllerProvider.notifier).acceptSwingSuggestion(suggestedM),
+              child: const Text('Widen'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

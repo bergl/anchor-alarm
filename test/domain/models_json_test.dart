@@ -209,7 +209,7 @@ void main() {
 
     test('derived values', () {
       final s = full();
-      expect(s.warningRadiusM, closeTo(52.5 * 0.8, 1e-9));
+      expect(s.warningRadiusM, closeTo(52.5 * 0.9, 1e-9));
       expect(s.duration(t), const Duration(hours: 9));
       final active = s.copyWith(radiusM: 10);
       expect(active.radiusM, 10);

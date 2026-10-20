@@ -39,7 +39,7 @@ class WatchSnapshot {
     this.outsideSince,
     this.snoozedUntil,
     this.events = const [],
-    this.radiusChanged = false,
+    this.swingSuggestionM,
   });
 
   final DateTime time;
@@ -74,8 +74,11 @@ class WatchSnapshot {
   /// Alerts newly raised by this step (rising edges), for the log and notifications.
   final List<AlertEvent> events;
 
-  /// True when learn-swing widened the radius in this step.
-  final bool radiusChanged;
+  /// Learn swing: during the first minutes of a watch, when the boat swings
+  /// close to the alarm ring, a wider radius to offer the user. The engine
+  /// never widens the radius by itself — a dragging anchor looks the same as
+  /// a wide swing, and the first minutes are when anchors drag most.
+  final double? swingSuggestionM;
 
   bool get hasFix => position != null;
 }
@@ -262,7 +265,7 @@ class AnchorWatchEngine {
 
   WatchSnapshot _evaluate(DateTime now) {
     final events = <AlertEvent>[];
-    var radiusChanged = false;
+    double? swingSuggestion;
     final gpsFresh =
         now.difference(_lastUsableFixAt) < Duration(seconds: _p.gpsLostSec);
 
@@ -280,17 +283,14 @@ class AnchorWatchEngine {
       final d = _distanceM!;
       _maxDistanceM = math.max(_maxDistanceM, d);
 
-      // Learn swing: widen (never shrink) while the boat settles, within a cap.
+      // Learn swing: suggest (never apply) a wider radius while the boat settles.
       if (_p.learnSwing &&
           now.difference(_startedAt) < learnSwingPeriod &&
           (_accuracyM ?? double.infinity) <= _p.poorAccuracyM &&
-          d > _session.radiusM * learnSwingTrigger) {
+          _maxDistanceM > _session.radiusM * learnSwingTrigger) {
         final cap = _session.initialRadiusM * learnSwingCap;
-        final wanted = math.min(cap, d / learnSwingTrigger);
-        if (wanted > _session.radiusM + 0.5) {
-          _session = _session.copyWith(radiusM: wanted);
-          radiusChanged = true;
-        }
+        final wanted = math.min(cap, (_maxDistanceM / learnSwingTrigger).ceilToDouble());
+        if (wanted > _session.radiusM + 0.5) swingSuggestion = wanted;
       }
 
       if (d > _session.warningRadiusM) {
@@ -380,7 +380,7 @@ class AnchorWatchEngine {
       outsideSince: _nearEdgeSince,
       snoozedUntil: snoozed ? _snoozedUntil : null,
       events: events,
-      radiusChanged: radiusChanged,
+      swingSuggestionM: swingSuggestion,
     );
   }
 }

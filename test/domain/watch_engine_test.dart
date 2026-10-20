@@ -13,13 +13,13 @@ void main() {
       final h = Harness(testProfile);
       final rnd = math.Random(1);
       h.run(0, 3600, (_) => 25 + rnd.nextDouble() * 5,
-          acc: 5); // swings 25..30 m, radius 40, warning 32
+          acc: 5); // swings 25..30 m, radius 40, warning 36
       expect(h.snaps.every((s) => s.state == WatchState.safe), isTrue);
       expect(h.events, isEmpty);
       expect(h.everRang, isFalse);
       expect(h.last.distanceM, inInclusiveRange(25, 30));
       expect(h.last.radiusM, 40);
-      expect(h.last.warningRadiusM, closeTo(32, 1e-9));
+      expect(h.last.warningRadiusM, closeTo(36, 1e-9));
       expect(h.last.maxDistanceM, lessThanOrEqualTo(30));
       expect(h.engine.session.alerts, isEmpty);
     });
@@ -48,7 +48,7 @@ void main() {
     test('outside warning ring for less than the delay: no warning', () {
       final h = Harness(noAvg);
       h.run(0, 59, (_) => 20);
-      h.run(60, 68, (_) => 35); // 9 fixes, last tick at 68.5 < 60 + 10
+      h.run(60, 68, (_) => 38); // 9 fixes, last tick at 68.5 < 60 + 10
       h.run(69, 120, (_) => 20);
       expect(h.events, isEmpty);
       expect(h.snaps.every((s) => s.state == WatchState.safe), isTrue);
@@ -57,7 +57,7 @@ void main() {
     test('outside warning ring for the delay: warning and exactly one event', () {
       final h = Harness(noAvg);
       h.run(0, 59, (_) => 20);
-      h.run(60, 120, (_) => 35);
+      h.run(60, 120, (_) => 38);
       expect(h.firstTime((s) => s.state == WatchState.warning), 70);
       expect(h.last.state, WatchState.warning);
       expect(h.last.reasons, {AlertReason.nearEdge});
@@ -74,7 +74,7 @@ void main() {
     test('with averaging, a sustained excursion still warns once', () {
       final h = Harness(testProfile);
       h.run(0, 59, (_) => 20);
-      h.run(60, 180, (_) => 35);
+      h.run(60, 180, (_) => 38);
       expect(h.last.state, WatchState.warning);
       expect(h.eventsOf(AlertReason.nearEdge), hasLength(1));
     });
@@ -429,62 +429,64 @@ void main() {
     });
   });
 
-  group('learn swing', () {
+  group('learn swing (suggestion only)', () {
     final learn = testProfile.copyWith(learnSwing: true);
 
-    test('widens the radius within the first 15 minutes', () {
+    test('suggests a wider radius within the first 15 minutes, never applies it', () {
       final h = Harness(learn);
       h.run(0, 60, (_) => 20);
-      expect(h.last.radiusM, 40);
+      expect(h.last.swingSuggestionM, isNull);
       h.run(61, 120, (_) => 38);
-      expect(h.last.radiusM, closeTo(38 / learnSwingTrigger, 0.6));
-      expect(h.snaps.any((s) => s.radiusChanged), isTrue);
-      expect(h.engine.session.radiusM, h.last.radiusM);
-      expect(h.engine.session.initialRadiusM, 40);
-      expect(h.everRang, isFalse);
+      expect(h.last.radiusM, 40);
+      expect(h.last.swingSuggestionM, (38 / learnSwingTrigger).ceilToDouble());
+      expect(h.engine.session.radiusM, 40);
     });
 
-    test('is capped at 1.5x the initial radius and alarms beyond it', () {
+    test('a steady drag in the first minutes still alarms (regression)', () {
+      final h = Harness(learn, radius: 47);
+      h.run(0, 60, (_) => 35);
+      // Anchor drags at 0.4 m/s.
+      h.run(61, 200, (s) => 35 + 0.4 * (s - 60));
+      expect(h.last.radiusM, 47);
+      expect(h.everRang, isTrue);
+      expect(h.eventsOf(AlertReason.drag), hasLength(1));
+    });
+
+    test('suggestion is capped at 1.5x the initial radius', () {
       final h = Harness(learn);
       h.run(0, 60, (_) => 20);
-      h.run(61, 200, (_) => 70);
-      expect(h.last.radiusM, closeTo(60, 1e-9));
-      expect(h.snaps.every((s) => s.radiusM <= 60 + 1e-9), isTrue);
-      expect(h.last.state, WatchState.alarm);
-      expect(h.last.ringing, isTrue);
+      h.run(61, 70, (_) => 70);
+      expect(h.last.swingSuggestionM, closeTo(60, 1e-9));
     });
 
-    test('never shrinks', () {
-      final h = Harness(learn);
-      h.run(0, 60, (_) => 40);
-      final widened = h.last.radiusM;
-      expect(widened, greaterThan(40));
-      h.run(61, 400, (_) => 10);
-      expect(h.last.radiusM, widened);
-      for (var i = 1; i < h.snaps.length; i++) {
-        expect(h.snaps[i].radiusM, greaterThanOrEqualTo(h.snaps[i - 1].radiusM));
-      }
-    });
-
-    test('does not widen after 15 minutes', () {
+    test('no suggestion after 15 minutes', () {
       final h = Harness(learn);
       h.run(0, 15 * 60, (_) => 20);
-      h.run(15 * 60 + 1, 15 * 60 + 120, (_) => 45);
-      expect(h.last.radiusM, 40);
-      expect(h.last.state, WatchState.alarm);
+      h.run(15 * 60 + 1, 15 * 60 + 20, (_) => 38);
+      expect(h.last.swingSuggestionM, isNull);
     });
 
-    test('does not widen with learnSwing off', () {
+    test('no suggestion with learnSwing off', () {
       final h = Harness(testProfile);
       h.run(0, 120, (_) => 39);
-      expect(h.last.radiusM, 40);
-      expect(h.snaps.any((s) => s.radiusChanged), isFalse);
+      expect(h.snaps.every((s) => s.swingSuggestionM == null), isTrue);
     });
 
-    test('does not widen on poor accuracy', () {
+    test('accepting the suggestion via updateSession clears it', () {
+      final h = Harness(learn);
+      h.run(0, 60, (_) => 38);
+      final sug = h.last.swingSuggestionM!;
+      h.engine.updateSession(h.engine.session.copyWith(radiusM: sug));
+      h.run(61, 70, (_) => 38);
+      expect(h.last.radiusM, sug);
+      expect(h.last.swingSuggestionM, isNull);
+    });
+
+    test('no suggestion on poor accuracy', () {
       final h = Harness(learn);
       h.run(0, 120, (_) => 39, acc: 40);
       expect(h.last.radiusM, 40);
+      expect(h.snaps.every((s) => s.swingSuggestionM == null), isTrue);
     });
 
     test('a watch resumed after a restart does not learn again', () {
@@ -573,7 +575,7 @@ void main() {
       final l = builtIn(AlarmProfile.lunchId);
       final o = builtIn(AlarmProfile.overnightId);
       final s = builtIn(AlarmProfile.stormId);
-      expect([l.warningRatio, o.warningRatio, s.warningRatio], [0.8, 0.8, 0.7]);
+      expect([l.warningRatio, o.warningRatio, s.warningRatio], [0.9, 0.9, 0.85]);
       expect([l.alarmDelaySec, o.alarmDelaySec, s.alarmDelaySec], [20, 10, 5]);
       expect([l.averagingSec, o.averagingSec, s.averagingSec], [15, 10, 5]);
       expect([l.gpsLostSec, o.gpsLostSec, s.gpsLostSec], [60, 60, 30]);

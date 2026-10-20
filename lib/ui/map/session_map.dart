@@ -33,6 +33,8 @@ class SessionMap extends StatelessWidget {
     final ring = hadAlarm ? c.alarm : c.safe;
     final pts = [for (final p in track) p.position];
     return FlutterMap(
+      // The track loads after the session; rebuild so the initial fit includes it.
+      key: ValueKey(track.length),
       options: MapOptions(
         initialCameraFit: CameraFit.bounds(
           bounds: _bounds(),

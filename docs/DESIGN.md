@@ -10,8 +10,10 @@ build *now*, the decisions taken, and the defaults chosen.
 - Set anchor: *from where the boat settles* (offset from current position by the
   expected swing distance towards the bow) and *long-press / drag on the map*.
 - Alarm radius from **rode length + depth** (+ boat length + GPS margin), adjustable
-  with a slider; optional **learn swing** that only ever widens the radius (capped).
-- Warning ring (default 80 % of radius) and alarm ring; green / yellow / red.
+  with a slider; optional **learn swing** that *suggests* a wider radius during the
+  first 15 min (capped at +50 %); the user confirms — it is never applied
+  automatically, because a dragging anchor looks exactly like a wide swing.
+- Warning ring (default 90 % of radius) and alarm ring; green / yellow / red.
 - Alarm delay, GPS position averaging, GPS-lost alarm, poor-GPS warning,
   low-battery warning/alarm.
 - Loud looping alarm sound + vibration + high-priority local notification;
@@ -78,18 +80,22 @@ same engine later run in a background isolate or on a server.
 
 | Parameter | Lunch stop | Overnight | Storm watch |
 |---|---|---|---|
-| Warning ring | 80 % | 80 % | 70 % |
+| Warning ring | 90 % | 90 % | 85 % |
 | Alarm delay (must stay outside) | 20 s | 10 s | 5 s |
 | Position averaging window | 15 s | 10 s | 5 s |
 | GPS lost after | 60 s | 60 s | 30 s |
 | Poor GPS (accuracy worse than) | 30 m | 25 m | 20 m |
-| Learn swing (first 15 min, cap +50 %) | on | on | off |
+| Learn swing suggestion (first 15 min, cap +50 %) | on | on | off |
 | Low battery warning / alarm | 20 % / 10 % | 20 % / 10 % | 30 % / 15 % |
 
 - **Radius** = √(rode² − depth²) + boat length + GPS margin (default 5 m), min 15 m.
   When the anchor is set "from where the boat settles", anchor point = current
   position moved by √(rode² − depth²) + GPS-to-bow distance along the bow
   direction (compass heading if available, else user drags the anchor on the map).
+- Why 90 %: with the default radius the phone normally lies at about
+  √(rode² − depth²) + GPS-to-bow from the anchor, i.e. ~75 % of the radius
+  (30 m rode, 5 m depth, 12 m boat: 35.6 m of 47 m). An 80 % warning ring sat
+  only ~2 m outside the normal lie and GPS noise alone triggered it.
 - **Averaging**: accuracy-weighted mean (weight 1/acc²) of the fixes in the window.
 - **States**: `safe` → `warning` (inside alarm ring, outside warning ring for the
   delay) → `alarm` (outside alarm ring for the delay). Alarm **latches** until the

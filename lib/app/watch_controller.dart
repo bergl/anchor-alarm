@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/geo.dart';
 import '../domain/models.dart';
 import '../domain/track_recorder.dart';
 import '../domain/watch_engine.dart';
@@ -200,6 +201,17 @@ class WatchController extends Notifier<WatchViewState> {
       rodeM: rodeM,
       depthM: depthM,
     );
+    final settings = ref.read(settingsProvider);
+    if (settings.useSimulator) {
+      // Make the simulated boat lie to this anchor on the rode the user entered,
+      // so demos behave like a real anchorage.
+      final sim = ref.read(simulatorProvider);
+      if (rodeM != null && depthM != null) {
+        sim.rodeM = horizontalRodeM(rodeM: rodeM, depthM: depthM) +
+            settings.boat.gpsToBowM;
+      }
+      sim.relocate(anchor);
+    }
     await ref.read(notificationServiceProvider).requestPermission();
     await ref.read(sessionRepositoryProvider).save(session);
     _startEngine(session);
@@ -249,6 +261,11 @@ class WatchController extends Notifier<WatchViewState> {
 
   void setRadius(double radiusM) =>
       _updateSession((s) => s.copyWith(radiusM: radiusM, initialRadiusM: radiusM));
+
+  /// Accept a learn-swing suggestion. Unlike [setRadius] this keeps the
+  /// initial radius, so suggestions stay capped relative to the original.
+  void acceptSwingSuggestion(double radiusM) =>
+      _updateSession((s) => s.copyWith(radiusM: radiusM));
 
   void setProfile(AlarmProfile profile) => _updateSession((s) => s.copyWith(profile: profile));
 
@@ -319,7 +336,6 @@ class WatchController extends Notifier<WatchViewState> {
     final repo = ref.read(sessionRepositoryProvider);
     if (forcePersist ||
         snap.events.isNotEmpty ||
-        snap.radiusChanged ||
         now.difference(_lastPersist) >= _persistEvery) {
       _lastPersist = now;
       repo.save(session);

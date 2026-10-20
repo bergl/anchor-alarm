@@ -162,12 +162,18 @@ class GeolocatorLocationSource implements LocationSource {
     }
   }
 
+  /// Accuracy assumed when the platform does not report one.
+  static const double unknownAccuracyM = 15;
+
   static PositionFix _toFix(Position p) {
     final speedOk = p.speed.isFinite && p.speed >= 0;
     final headingOk = p.heading.isFinite && p.heading >= 0;
     return PositionFix(
       position: LatLng(p.latitude, p.longitude),
-      accuracyM: p.accuracy.isFinite && p.accuracy > 0 ? p.accuracy : 9999,
+      // Some sources (mock locations, external receivers, browsers) report 0
+      // when accuracy is unknown; assume a typical phone fix rather than
+      // discarding the position.
+      accuracyM: p.accuracy.isFinite && p.accuracy > 0 ? p.accuracy : unknownAccuracyM,
       time: p.timestamp,
       speedMps: speedOk ? p.speed : null,
       // geolocator reports -1 (iOS) / 0 without hasBearing (Android) when the

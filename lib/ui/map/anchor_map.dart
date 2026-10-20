@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../app/providers.dart';
 import '../../app/watch_controller.dart';
+import '../../domain/geo.dart';
 import '../../domain/models.dart';
 import '../../services/location/simulated_location_source.dart';
 import '../theme/app_theme.dart';
@@ -119,10 +120,34 @@ class _AnchorMapState extends ConsumerState<AnchorMap> {
   void _centerOnBoat({bool animateZoom = false}) {
     if (!_ready) return;
     final m = _model();
+    if (_fitRing(m)) return;
     final target = m.boat ?? m.anchor;
     if (target == null) return;
     final zoom = _map.camera.zoom < 14 && animateZoom ? 17.0 : _map.camera.zoom;
     _map.move(target, zoom);
+  }
+
+  /// While watching or placing the anchor, frame the whole alarm ring (and the
+  /// boat if it is outside) above the bottom panel. Returns false when there
+  /// is no ring to frame.
+  bool _fitRing(_MapModel m) {
+    final anchor = m.anchor;
+    final radius = m.radiusM;
+    if (anchor == null || radius == null) return false;
+    final pts = [
+      for (final b in const [0.0, 90.0, 180.0, 270.0])
+        destination(anchor, b, radius * 1.1),
+      ?m.boat,
+    ];
+    final h = MediaQuery.sizeOf(context).height;
+    // The drop-anchor panel covers more of the screen than the status card.
+    final bottom = m.watching ? 300.0 : h * 0.64;
+    _map.fitCamera(CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(pts),
+      padding: EdgeInsets.fromLTRB(24, 120, 24, bottom),
+      maxZoom: 19,
+    ));
+    return true;
   }
 
   _MapModel _model() => _MapModel(
@@ -151,8 +176,19 @@ class _AnchorMapState extends ConsumerState<AnchorMap> {
           (v) => (v.watching ? v.snapshot?.position : null) ?? v.fix?.position),
       (prev, next) {
         if (next != null && widget.follow.following && _ready) {
-          _map.move(next, _map.camera.zoom);
+          if (!_fitRing(_model())) _map.move(next, _map.camera.zoom);
         }
+      },
+    );
+    // Re-frame when the anchor, radius or watch state changes.
+    ref.listen<(LatLng?, double?, bool)>(
+      watchControllerProvider.select((v) => (
+            v.session?.anchor ?? v.draft?.anchor,
+            v.snapshot?.radiusM ?? v.session?.radiusM ?? v.draft?.radiusM,
+            v.watching,
+          )),
+      (prev, next) {
+        if (widget.follow.following && _ready) _centerOnBoat();
       },
     );
 
