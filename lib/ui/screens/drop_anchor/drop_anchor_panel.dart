@@ -9,6 +9,7 @@ import '../../../app/format.dart';
 import '../../../app/providers.dart';
 import '../../../app/watch_controller.dart';
 import '../../../domain/geo.dart';
+import '../../../domain/scope.dart';
 import '../../ui_providers.dart';
 import '../../widgets/number_input.dart';
 import '../../widgets/permission_notice.dart';
@@ -216,6 +217,7 @@ class _DropAnchorPanelState extends ConsumerState<DropAnchorPanel> {
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
+                _ScopeHint(rodeM: form.rodeM, depthM: form.depthM, unit: dU),
                 const SizedBox(height: 12),
                 Text('Alarm profile', style: theme.textTheme.labelLarge),
                 const SizedBox(height: 4),
@@ -360,6 +362,59 @@ class _BowDirection extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Warns about short scope and says how much rode gives 3:1 and 5:1.
+class _ScopeHint extends StatelessWidget {
+  const _ScopeHint({required this.rodeM, required this.depthM, required this.unit});
+
+  final double rodeM;
+  final double depthM;
+  final DistanceUnit unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = scopeAdvice(rodeM: rodeM, depthM: depthM);
+    final theme = Theme.of(context);
+    final ratio = '${a.ratio.toStringAsFixed(1)}:1';
+    final (icon, color, text) = switch (a.rating) {
+      ScopeRating.tooShort => (
+          Icons.error_outline,
+          theme.colorScheme.error,
+          'Rode is shorter than the depth. Let out at least '
+              '${formatDistance(a.rodeFor5M, unit)} (5:1).',
+        ),
+      ScopeRating.short => (
+          Icons.warning_amber_rounded,
+          theme.colorScheme.error,
+          'Short scope ($ratio) — likely to drag. Let out '
+              '${formatDistance(a.rodeFor3M, unit)} for 3:1, '
+              '${formatDistance(a.rodeFor5M, unit)} for 5:1.',
+        ),
+      ScopeRating.fair => (
+          Icons.info_outline,
+          theme.colorScheme.onSurfaceVariant,
+          'Scope $ratio — fine for all-chain in settled weather; '
+              '${formatDistance(a.rodeFor5M, unit)} for 5:1 if the wind rises.',
+        ),
+      ScopeRating.good => (
+          Icons.check_circle_outline,
+          theme.colorScheme.onSurfaceVariant,
+          'Scope $ratio.',
+        ),
+    };
+    return Padding(
+      key: const ValueKey('scopeHint'),
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: color)),
+        ),
+      ]),
     );
   }
 }
