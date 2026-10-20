@@ -5,7 +5,19 @@ enum DistanceUnit { metres, feet }
 enum ThemePref { system, day, night }
 
 /// Base map choice. Seamarks (OpenSeaMap) is a separate overlay toggle.
-enum BaseMap { osm, satellite, none }
+/// [bathymetry]: EMODnet shaded depth + land relief (worldwide, best in Europe).
+enum BaseMap { osm, satellite, bathymetry, none }
+
+/// Depth overlay drawn over the base map.
+enum DepthLayer {
+  none,
+
+  /// EMODnet Bathymetry (European waters, ~115 m grid).
+  emodnet,
+
+  /// GEBCO global bathymetric grid.
+  gebco,
+}
 
 class AppSettings {
   const AppSettings({
@@ -16,6 +28,8 @@ class AppSettings {
     this.boat = const BoatSettings(),
     this.baseMap = BaseMap.osm,
     this.seamarks = true,
+    this.depthLayer = DepthLayer.none,
+    this.autoOfflineMap = true,
     this.keepScreenOn = false,
     this.useSimulator = false,
     this.onboardingDone = false,
@@ -28,6 +42,10 @@ class AppSettings {
   final BoatSettings boat;
   final BaseMap baseMap;
   final bool seamarks;
+  final DepthLayer depthLayer;
+
+  /// Download the chart around the anchor when a watch starts (mobile only).
+  final bool autoOfflineMap;
   final bool keepScreenOn;
 
   /// Use the GPS simulator instead of the device location (demo/testing).
@@ -42,6 +60,8 @@ class AppSettings {
     BoatSettings? boat,
     BaseMap? baseMap,
     bool? seamarks,
+    DepthLayer? depthLayer,
+    bool? autoOfflineMap,
     bool? keepScreenOn,
     bool? useSimulator,
     bool? onboardingDone,
@@ -54,6 +74,8 @@ class AppSettings {
         boat: boat ?? this.boat,
         baseMap: baseMap ?? this.baseMap,
         seamarks: seamarks ?? this.seamarks,
+        depthLayer: depthLayer ?? this.depthLayer,
+        autoOfflineMap: autoOfflineMap ?? this.autoOfflineMap,
         keepScreenOn: keepScreenOn ?? this.keepScreenOn,
         useSimulator: useSimulator ?? this.useSimulator,
         onboardingDone: onboardingDone ?? this.onboardingDone,
@@ -67,6 +89,8 @@ class AppSettings {
         'boat': boat.toJson(),
         'baseMap': baseMap.name,
         'seamarks': seamarks,
+        'depthLayer': depthLayer.name,
+        'autoOfflineMap': autoOfflineMap,
         'keepScreenOn': keepScreenOn,
         'useSimulator': useSimulator,
         'onboardingDone': onboardingDone,
@@ -86,6 +110,8 @@ class AppSettings {
           : d.boat,
       baseMap: e(BaseMap.values, j['baseMap'], d.baseMap),
       seamarks: j['seamarks'] as bool? ?? d.seamarks,
+      depthLayer: e(DepthLayer.values, j['depthLayer'], d.depthLayer),
+      autoOfflineMap: j['autoOfflineMap'] as bool? ?? d.autoOfflineMap,
       keepScreenOn: j['keepScreenOn'] as bool? ?? d.keepScreenOn,
       useSimulator: j['useSimulator'] as bool? ?? d.useSimulator,
       onboardingDone: j['onboardingDone'] as bool? ?? d.onboardingDone,
