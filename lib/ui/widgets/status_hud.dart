@@ -104,6 +104,7 @@ class _WatchingStatus extends ConsumerWidget {
         StateBanner(
           state: snap?.state ?? WatchState.safe,
           reasons: snap?.reasons ?? const {},
+          waitingForGps: !(snap?.hasFix ?? false),
         ),
         if (snap?.snoozedUntil != null)
           Padding(

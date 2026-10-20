@@ -12,8 +12,11 @@ class AppMenuDrawer extends ConsumerWidget {
   const AppMenuDrawer({super.key});
 
   void _open(BuildContext context, Widget page) {
-    Navigator.pop(context);
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    // Look the navigator up before closing the drawer: the drawer's context is
+    // deactivated once it closes.
+    final nav = Navigator.of(context);
+    nav.pop();
+    nav.push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
   @override
@@ -28,7 +31,10 @@ class AppMenuDrawer extends ConsumerWidget {
               child: Row(children: [
                 Icon(Icons.anchor, color: theme.colorScheme.primary, size: 32),
                 const SizedBox(width: 12),
-                Text('Anchor Alarm', style: theme.textTheme.titleLarge),
+                Flexible(
+                  child: Text('Anchor Alarm',
+                      style: theme.textTheme.titleLarge, overflow: TextOverflow.ellipsis),
+                ),
               ]),
             ),
             ListTile(

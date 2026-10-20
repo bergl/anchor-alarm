@@ -8,6 +8,7 @@ runs low, a loud alarm sounds.
 - Product spec: [docs/SPEC.md](docs/SPEC.md) (captured from the project's planning doc)
 - Design, scope and alarm defaults: [docs/DESIGN.md](docs/DESIGN.md)
 - What to verify on real phones: [docs/DEVICE_TESTING.md](docs/DEVICE_TESTING.md)
+- Demo video (1:44, narrated, GPS simulator): [docs/anchor-alarm-demo.mp4](docs/anchor-alarm-demo.mp4)
 
 ## Status
 
@@ -43,6 +44,8 @@ flutter test                      # 169 unit, controller and widget tests
 flutter run -d chrome             # web; enable Settings → "Use GPS simulator" to demo
 flutter run                       # connected Android / iOS device
 flutter build web --release --no-web-resources-cdn
+# demo build that starts with the GPS simulator:
+flutter build web --release --no-web-resources-cdn --dart-define=DEMO=true
 ```
 
 Try it without a boat: in **Settings → Use GPS simulator**, drop anchor, start the

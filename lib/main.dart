@@ -15,7 +15,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final database = await openAppDatabase();
-  final settings = await database.settings.load();
+  var settings = await database.settings.load();
+  // Demo builds (`--dart-define=DEMO=true`, e.g. the hosted web preview) start
+  // with the GPS simulator so the app can be tried without a boat.
+  if (const bool.fromEnvironment('DEMO') && !settings.onboardingDone) {
+    settings = settings.copyWith(useSimulator: true);
+  }
   final customProfiles = await database.settings.loadCustomProfiles();
 
   final services = createPlatformServices();

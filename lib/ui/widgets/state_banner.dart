@@ -11,11 +11,16 @@ class StateBanner extends StatefulWidget {
     super.key,
     required this.state,
     required this.reasons,
+    this.waitingForGps = false,
     this.trailing,
   });
 
   final WatchState state;
   final Set<AlertReason> reasons;
+
+  /// No position yet (e.g. just after a restart). Shown instead of SAFE so the
+  /// screen never claims the boat is safe without knowing where it is.
+  final bool waitingForGps;
   final Widget? trailing;
 
   @override
@@ -60,10 +65,11 @@ class _StateBannerState extends State<StateBanner>
   @override
   Widget build(BuildContext context) {
     final c = AnchorColors.of(context);
-    final base = c.forState(widget.state);
+    final waiting = widget.waitingForGps && widget.state == WatchState.safe;
+    final base = waiting ? c.neutral : c.forState(widget.state);
     final reasons = widget.reasons.toList()
       ..sort((a, b) => (b.isAlarm ? 1 : 0) - (a.isAlarm ? 1 : 0));
-    final icon = switch (widget.state) {
+    final icon = waiting ? Icons.gps_not_fixed : switch (widget.state) {
       WatchState.safe => Icons.check_circle,
       WatchState.warning => Icons.warning_amber_rounded,
       WatchState.alarm => Icons.notifications_active,
@@ -91,7 +97,7 @@ class _StateBannerState extends State<StateBanner>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    stateLabel(widget.state),
+                    waiting ? 'WAITING FOR GPS' : stateLabel(widget.state),
                     style: const TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w900,
@@ -99,6 +105,9 @@ class _StateBannerState extends State<StateBanner>
                       height: 1.1,
                     ),
                   ),
+                  if (waiting)
+                    const Text('The alarm sounds if no position arrives.',
+                        style: TextStyle(fontSize: 15)),
                   for (final r in reasons)
                     Text(alertShort(r), style: const TextStyle(fontSize: 15)),
                 ],

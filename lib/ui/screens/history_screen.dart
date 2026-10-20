@@ -66,6 +66,9 @@ class SessionTile extends ConsumerWidget {
         backgroundColor: alarms > 0
             ? theme.colorScheme.errorContainer
             : theme.colorScheme.secondaryContainer,
+        foregroundColor: alarms > 0
+            ? theme.colorScheme.onErrorContainer
+            : theme.colorScheme.onSecondaryContainer,
         child: Icon(alarms > 0 ? Icons.notifications_active : Icons.anchor),
       ),
       title: Text(title),

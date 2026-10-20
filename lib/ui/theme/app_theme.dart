@@ -173,6 +173,8 @@ abstract final class AppTheme {
       onTertiary: Colors.black,
       error: nightRedBright,
       onError: Colors.black,
+      errorContainer: Color(0xFF3A0808),
+      onErrorContainer: nightRedBright,
       surface: Colors.black,
       onSurface: _nightText,
       onSurfaceVariant: Color(0xFF9A2323),
